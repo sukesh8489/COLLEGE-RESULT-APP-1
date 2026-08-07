@@ -1,0 +1,6 @@
+{
+  "name": "Jaya Sakthi Engineering College Results Portal",
+  "description": "College student results portal and admin/faculty management system for Jaya Sakthi Engineering College.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
