@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "departments": {
+      "title": "Departments",
+      "description": "Academic departments in the college",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["code", "name"]
+    },
+    "hods": {
+      "title": "HOD Accounts",
+      "description": "Head of Department user accounts",
+      "type": "object",
+      "properties": {
+        "hodId": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "department": { "type": "string" },
+        "phone": { "type": "string" }
+      },
+      "required": ["hodId", "password", "name", "email", "department"]
+    },
+    "staff": {
+      "title": "Staff Members",
+      "description": "Teaching faculty accounts",
+      "type": "object",
+      "properties": {
+        "staffId": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "department": { "type": "string" },
+        "designation": { "type": "string" },
+        "phone": { "type": "string" }
+      },
+      "required": ["staffId", "password", "name", "email", "department", "designation"]
+    },
+    "students": {
+      "title": "Students",
+      "description": "Student academic records and marks",
+      "type": "object",
+      "properties": {
+        "registerNumber": { "type": "string" },
+        "name": { "type": "string" },
+        "dob": { "type": "string" },
+        "department": { "type": "string" },
+        "year": { "type": "number" },
+        "currentSemester": { "type": "number" },
+        "batch": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "attendance": { "type": "object" },
+        "examRecords": { "type": "array" }
+      },
+      "required": ["registerNumber", "name", "dob", "department", "year", "currentSemester", "batch"]
+    },
+    "subjects": {
+      "title": "Subjects",
+      "description": "Course subjects offered by departments",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "department": { "type": "string" },
+        "semester": { "type": "number" },
+        "credits": { "type": "number" },
+        "maxMarks": { "type": "number" }
+      },
+      "required": ["code", "name", "department", "semester", "maxMarks"]
+    },
+    "assignments": {
+      "title": "Subject Assignments",
+      "description": "Mapping of subjects to staff members",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subjectCode": { "type": "string" },
+        "staffId": { "type": "string" },
+        "department": { "type": "string" }
+      },
+      "required": ["id", "subjectCode", "staffId", "department"]
+    }
+  }
+}
