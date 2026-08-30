@@ -1,703 +1,1615 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
+  ShieldCheck,
   Building2,
   Users,
   UserCheck,
   GraduationCap,
+  TrendingUp,
   PlusCircle,
   Trash2,
-  BarChart3,
-  Download,
-  Key,
-  ShieldCheck,
-  CheckCircle2,
-  XCircle,
   Search,
   BookOpen,
-  Award,
-  Sparkles,
-  Edit3,
-  Save,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
   X,
+  KeyRound,
+  Mail,
+  Phone,
+  Briefcase,
+  SlidersHorizontal,
+  ChevronRight,
+  Layers,
+  Award,
 } from 'lucide-react';
-import { DepartmentInfo, HODAccount, StaffMember, Student, Subject } from '../types';
+import {
+  CurrentUser,
+  DepartmentInfo,
+  DegreeType,
+  HODAccount,
+  StaffMember,
+  Student,
+  Subject,
+} from '../types';
+import {
+  saveDepartmentInFirestore,
+  deleteDepartmentFromFirestore,
+  saveHodInFirestore,
+  deleteHodFromFirestore,
+  saveStaffInFirestore,
+  deleteStaffFromFirestore,
+  saveSubjectInFirestore,
+  deleteSubjectFromFirestore,
+} from '../lib/firestoreService';
 
 interface AdminPortalProps {
   departments: DepartmentInfo[];
-  setDepartments: React.Dispatch<React.SetStateAction<DepartmentInfo[]>>;
   hods: HODAccount[];
-  setHods: React.Dispatch<React.SetStateAction<HODAccount[]>>;
-  staffMembers: StaffMember[];
+  staff: StaffMember[];
   students: Student[];
   subjects: Subject[];
-  setSubjects?: React.Dispatch<React.SetStateAction<Subject[]>>;
-  onLogout: () => void;
+  marks?: any[];
+  currentUser?: CurrentUser;
+  onAddDepartment?: (dept: DepartmentInfo) => void;
+  onDeleteDepartment?: (code: string) => void;
+  onAddHod?: (hod: HODAccount) => void;
+  onDeleteHod?: (id: string) => void;
+  onAddStaff?: (staff: StaffMember) => void;
+  onDeleteStaff?: (id: string) => void;
+  onAddStudent?: (student: Student) => void;
+  onAddSubject?: (subj: Subject) => void;
+  onDeleteSubject?: (code: string) => void;
+  onDeleteUser?: (id: string, type: 'hod' | 'staff' | 'student') => void;
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
-  departments,
-  setDepartments,
-  hods,
-  setHods,
-  staffMembers,
-  students,
-  subjects,
-  setSubjects,
+  departments = [],
+  hods = [],
+  staff = [],
+  students = [],
+  subjects = [],
+  currentUser,
+  onAddDepartment,
+  onDeleteDepartment,
+  onAddHod,
+  onDeleteHod,
+  onAddStaff,
+  onDeleteStaff,
+  onAddSubject,
+  onDeleteSubject,
 }) => {
-  const [activeTab, setActiveTab] = useState<'departments' | 'hods' | 'subjects' | 'reports' | 'global'>('departments');
+  // Active subtab inside Admin Portal
+  const [activeSubTab, setActiveSubTab] = useState<
+    'departments' | 'hods' | 'subjects' | 'reports' | 'overview'
+  >('departments');
 
-  // New Department Form State
-  const [newDeptCode, setNewDeptCode] = useState('');
-  const [newDeptName, setNewDeptName] = useState('');
+  // Delete Confirmation Modal State
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
+    type: 'department' | 'hod' | 'staff' | 'subject';
+    id: string;
+    name: string;
+    extraInfo?: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Form State: Add Department
+  const [deptCode, setDeptCode] = useState('');
+  const [deptName, setDeptName] = useState('');
+  const [deptDegree, setDeptDegree] = useState<DegreeType>('B.E');
   const [deptMessage, setDeptMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // New HOD Form State
-  const [newHodId, setNewHodId] = useState('');
-  const [newHodName, setNewHodName] = useState('');
-  const [newHodPass, setNewHodPass] = useState('hod123');
-  const [newHodDept, setNewHodDept] = useState(departments[0]?.code || '');
-  const [newHodEmail, setNewHodEmail] = useState('');
-  const [newHodPhone, setNewHodPhone] = useState('');
-  const [hodMessage, setHodMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Form State: Account Provisioning Selector (HOD vs Staff)
+  const [accountRole, setAccountRole] = useState<'hod' | 'staff'>('hod');
 
-  // Global Search State
+  // Form State: Add HOD Account
+  const [hodId, setHodId] = useState('');
+  const [hodName, setHodName] = useState('');
+  const [hodPassword, setHodPassword] = useState('hod@123');
+  const [hodEmail, setHodEmail] = useState('');
+  const [hodPhone, setHodPhone] = useState('');
+  const [hodDept, setHodDept] = useState(departments[0]?.code || 'CSE');
+
+  // Form State: Add Staff / Faculty Account
+  const [staffId, setStaffId] = useState('');
+  const [staffName, setStaffName] = useState('');
+  const [staffPassword, setStaffPassword] = useState('staff@123');
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffPhone, setStaffPhone] = useState('');
+  const [staffDept, setStaffDept] = useState(departments[0]?.code || 'CSE');
+  const [staffDesignation, setStaffDesignation] = useState('Assistant Professor');
+  const [staffIsCC, setStaffIsCC] = useState(false);
+  const [staffCcYear, setStaffCcYear] = useState<number>(1);
+  const [staffCcSem, setStaffCcSem] = useState<number>(1);
+  const [staffCcBatch, setStaffCcBatch] = useState('2023-2027');
+
+  // Feedback Message for HOD & Staff Form
+  const [accountMessage, setAccountMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Filter State for HOD & Staff List View
+  const [facultyFilterType, setFacultyFilterType] = useState<'all' | 'hod' | 'staff'>('all');
+  const [facultyFilterDept, setFacultyFilterDept] = useState<string | 'all'>('all');
+  const [facultySearchTerm, setFacultySearchTerm] = useState('');
+
+  // Form State: Add Curriculum Subject
+  const [subjCode, setSubjCode] = useState('');
+  const [subjName, setSubjName] = useState('');
+  const [subjDept, setSubjDept] = useState(departments[0]?.code || 'CSE');
+  const [subjSem, setSubjSem] = useState(1);
+  const [subjMessage, setSubjMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Subject Table Filter State (List View by Semester)
+  const [subjectFilterSem, setSubjectFilterSem] = useState<number>(1);
+  const [subjectFilterDept, setSubjectFilterDept] = useState<string | 'all'>('all');
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState('');
+
+  // Filter Configured Subjects by Selected Semester, Department, and Search query
+  const filteredSubjects = useMemo(() => {
+    return subjects.filter((s) => {
+      const matchesSem = Number(s.semester) === Number(subjectFilterSem);
+      const matchesDept = subjectFilterDept === 'all' || s.department === subjectFilterDept;
+      const q = subjectSearchQuery.trim().toLowerCase();
+      const matchesQuery = !q || s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.department.toLowerCase().includes(q);
+      return matchesSem && matchesDept && matchesQuery;
+    });
+  }, [subjects, subjectFilterSem, subjectFilterDept, subjectSearchQuery]);
+
+  // Global search filter for Overview
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Admin Subject Form State
-  const [adminSubDept, setAdminSubDept] = useState(departments[0]?.code || '');
-  const [adminSubCode, setAdminSubCode] = useState('');
-  const [adminSubName, setAdminSubName] = useState('');
-  const [adminSubSem, setAdminSubSem] = useState<number>(1);
-  const [adminSubMsg, setAdminSubMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Calculate Overall College Pass Rate
+  const collegePassRate = useMemo(() => {
+    let totalExamRecords = 0;
+    let passedExamRecords = 0;
 
-  // Admin Subject Filter & Edit State
-  const [adminSubFilterDept, setAdminSubFilterDept] = useState<string>('ALL');
-  const [adminEditingSubCode, setAdminEditingSubCode] = useState<string | null>(null);
-  const [adminEditSubName, setAdminEditSubName] = useState('');
-  const [adminEditSubSem, setAdminEditSubSem] = useState<number>(1);
-
-  const handleAdminAddSubject = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!setSubjects) return;
-    setAdminSubMsg(null);
-
-    const code = adminSubCode.trim().toUpperCase();
-    const name = adminSubName.trim();
-    const dept = adminSubDept || departments[0]?.code;
-
-    if (!dept) {
-      setAdminSubMsg({ type: 'error', text: 'Please select a department.' });
-      return;
-    }
-    if (!code || !name) {
-      setAdminSubMsg({ type: 'error', text: 'Subject code and title are required.' });
-      return;
-    }
-
-    if (subjects.some((s) => s.code === code)) {
-      setAdminSubMsg({ type: 'error', text: `Subject code "${code}" already exists.` });
-      return;
-    }
-
-    const newSubject: Subject = {
-      code,
-      name,
-      department: dept,
-      semester: adminSubSem,
-      maxMarks: 100,
-    };
-
-    setSubjects((prev) => [...prev, newSubject]);
-    setAdminSubCode('');
-    setAdminSubName('');
-    setAdminSubMsg({ type: 'success', text: `Subject "${name}" (${code}) added to ${dept}!` });
-  };
-
-  const handleAdminDeleteSubject = (subCode: string) => {
-    if (!setSubjects) return;
-    const subToDelete = subjects.find((s) => s.code === subCode);
-    const label = subToDelete ? `"${subToDelete.name}" (${subCode})` : subCode;
-    if (confirm(`Delete subject ${label}?`)) {
-      setSubjects((prev) => prev.filter((s) => s.code !== subCode));
-      setAdminSubMsg({ type: 'success', text: `Subject ${subCode} deleted successfully.` });
-    }
-  };
-
-  const handleAdminStartEditSubject = (sub: Subject) => {
-    setAdminEditingSubCode(sub.code);
-    setAdminEditSubName(sub.name);
-    setAdminEditSubSem(sub.semester);
-  };
-
-  const handleAdminSaveEditSubject = (subCode: string) => {
-    if (!setSubjects) return;
-    const name = adminEditSubName.trim();
-    if (!name) {
-      alert('Subject title cannot be empty.');
-      return;
-    }
-
-    setSubjects((prev) =>
-      prev.map((s) => {
-        if (s.code === subCode) {
-          return {
-            ...s,
-            name,
-            semester: adminEditSubSem,
-          };
+    students.forEach((st) => {
+      st.examRecords?.forEach((rec) => {
+        totalExamRecords++;
+        if (rec.overallStatus === 'PASS') {
+          passedExamRecords++;
         }
-        return s;
-      })
-    );
+      });
+    });
 
-    setAdminSubMsg({ type: 'success', text: `Subject ${subCode} updated successfully!` });
-    setAdminEditingSubCode(null);
-  };
+    if (totalExamRecords === 0) return '100.0%';
+    return ((passedExamRecords / totalExamRecords) * 100).toFixed(1) + '%';
+  }, [students]);
 
-  // Add Department Handler
-  const handleAddDepartment = (e: React.FormEvent) => {
+  // Handle Add Department
+  const handleCreateDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
-    setDeptMessage(null);
+    const cleanCode = deptCode.trim().toUpperCase();
+    const cleanName = deptName.trim();
 
-    const code = newDeptCode.trim().toUpperCase();
-    const name = newDeptName.trim();
-
-    if (!code || !name) {
-      setDeptMessage({ type: 'error', text: 'Department code and name are required.' });
+    if (!cleanCode || !cleanName) {
+      setDeptMessage({ type: 'error', text: 'Please enter department code and name.' });
       return;
     }
 
-    if (departments.some((d) => d.code === code)) {
-      setDeptMessage({ type: 'error', text: `Department code "${code}" already exists.` });
+    if (departments.some((d) => d.code.toUpperCase() === cleanCode)) {
+      setDeptMessage({ type: 'error', text: `Department "${cleanCode}" already exists.` });
       return;
     }
 
     const newDept: DepartmentInfo = {
-      code,
-      name,
-      description: '',
+      code: cleanCode,
+      name: cleanName,
+      degree: deptDegree,
     };
 
-    setDepartments((prev) => [...prev, newDept]);
-    setNewDeptCode('');
-    setNewDeptName('');
-    setDeptMessage({ type: 'success', text: `Department "${name}" (${code}) added successfully!` });
-  };
-
-  // Delete Department Handler
-  const handleDeleteDepartment = (code: string) => {
-    if (confirm(`Are you sure you want to remove department ${code}?`)) {
-      setDepartments((prev) => prev.filter((d) => d.code !== code));
-      setHods((prev) => prev.filter((h) => h.department !== code));
+    try {
+      await saveDepartmentInFirestore(newDept);
+      if (onAddDepartment) onAddDepartment(newDept);
+      setDeptCode('');
+      setDeptName('');
+      setDeptMessage({ type: 'success', text: `Department "${cleanCode}" created successfully!` });
+      setTimeout(() => setDeptMessage(null), 3500);
+    } catch (err: any) {
+      setDeptMessage({ type: 'error', text: err?.message || 'Failed to create department.' });
     }
   };
 
-  // Add HOD Handler
-  const handleAddHod = (e: React.FormEvent) => {
+  // Perform Confirmed Deletion
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmTarget) return;
+    setIsDeleting(true);
+
+    try {
+      if (deleteConfirmTarget.type === 'department') {
+        await deleteDepartmentFromFirestore(deleteConfirmTarget.id);
+        if (onDeleteDepartment) onDeleteDepartment(deleteConfirmTarget.id);
+        setDeptMessage({
+          type: 'success',
+          text: `Department "${deleteConfirmTarget.id}" deleted successfully.`,
+        });
+        setTimeout(() => setDeptMessage(null), 3500);
+      } else if (deleteConfirmTarget.type === 'hod') {
+        await deleteHodFromFirestore(deleteConfirmTarget.id);
+        if (onDeleteHod) onDeleteHod(deleteConfirmTarget.id);
+        setAccountMessage({
+          type: 'success',
+          text: `HOD account "${deleteConfirmTarget.id}" deleted successfully.`,
+        });
+        setTimeout(() => setAccountMessage(null), 3500);
+      } else if (deleteConfirmTarget.type === 'staff') {
+        await deleteStaffFromFirestore(deleteConfirmTarget.id);
+        if (onDeleteStaff) onDeleteStaff(deleteConfirmTarget.id);
+        setAccountMessage({
+          type: 'success',
+          text: `Staff account "${deleteConfirmTarget.id}" deleted successfully.`,
+        });
+        setTimeout(() => setAccountMessage(null), 3500);
+      } else if (deleteConfirmTarget.type === 'subject') {
+        await deleteSubjectFromFirestore(deleteConfirmTarget.id);
+        if (onDeleteSubject) onDeleteSubject(deleteConfirmTarget.id);
+        setSubjMessage({
+          type: 'success',
+          text: `Subject "${deleteConfirmTarget.id}" deleted successfully.`,
+        });
+        setTimeout(() => setSubjMessage(null), 3500);
+      }
+    } catch (err: any) {
+      console.error('Error during deletion:', err);
+      if (deleteConfirmTarget.type === 'department') {
+        setDeptMessage({ type: 'error', text: `Failed to delete department: ${err?.message || 'Unknown error'}` });
+      } else if (deleteConfirmTarget.type === 'hod' || deleteConfirmTarget.type === 'staff') {
+        setAccountMessage({ type: 'error', text: `Failed to delete ${deleteConfirmTarget.type}: ${err?.message || 'Unknown error'}` });
+      } else if (deleteConfirmTarget.type === 'subject') {
+        setSubjMessage({ type: 'error', text: `Failed to delete subject: ${err?.message || 'Unknown error'}` });
+      }
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmTarget(null);
+    }
+  };
+
+  // Handle Create HOD
+  const handleCreateHod = async (e: React.FormEvent) => {
     e.preventDefault();
-    setHodMessage(null);
-
-    const hodId = newHodId.trim().toUpperCase();
-    const name = newHodName.trim();
-
-    if (!hodId || !name || !newHodPass) {
-      setHodMessage({ type: 'error', text: 'HOD ID, Name and Password are required.' });
+    if (!hodId.trim() || !hodName.trim() || !hodDept) {
+      setAccountMessage({ type: 'error', text: 'Please fill in all HOD details.' });
       return;
     }
 
-    if (hods.some((h) => h.hodId.toUpperCase() === hodId)) {
-      setHodMessage({ type: 'error', text: `HOD account with ID "${hodId}" already exists.` });
+    const cleanId = hodId.trim().toUpperCase();
+
+    // Check if ID already exists
+    if (hods.some((h) => h.hodId.toUpperCase() === cleanId)) {
+      setAccountMessage({ type: 'error', text: `HOD ID "${cleanId}" already exists.` });
       return;
     }
 
     const newHod: HODAccount = {
-      hodId,
-      name,
-      password: newHodPass,
-      department: newHodDept,
-      email: newHodEmail.trim() || `${hodId.toLowerCase()}@jayasakthi.edu`,
-      phone: newHodPhone.trim(),
+      hodId: cleanId,
+      name: hodName.trim(),
+      password: hodPassword || 'hod@123',
+      email: hodEmail.trim() || `${cleanId.toLowerCase()}@jayasakthi.edu`,
+      phone: hodPhone.trim() || undefined,
+      department: hodDept,
     };
 
-    setHods((prev) => [...prev, newHod]);
-    setNewHodId('');
-    setNewHodName('');
-    setNewHodPass('hod123');
-    setNewHodEmail('');
-    setNewHodPhone('');
-    setHodMessage({ type: 'success', text: `HOD Account created for ${name} (${newHodDept})!` });
-  };
-
-  // Delete HOD Handler
-  const handleDeleteHod = (hodId: string) => {
-    if (confirm(`Remove HOD Account ${hodId}?`)) {
-      setHods((prev) => prev.filter((h) => h.hodId !== hodId));
+    try {
+      await saveHodInFirestore(newHod);
+      if (onAddHod) onAddHod(newHod);
+      setHodId('');
+      setHodName('');
+      setHodEmail('');
+      setHodPhone('');
+      setAccountMessage({ type: 'success', text: `HOD Account (${newHod.name} - ${newHod.department}) created successfully!` });
+      setTimeout(() => setAccountMessage(null), 4000);
+    } catch (err: any) {
+      setAccountMessage({ type: 'error', text: err?.message || 'Failed to create HOD account.' });
     }
   };
 
-  // College Statistics
-  const totalStudentsCount = students.length;
-  const totalStaffCount = staffMembers.length;
-  const totalHodsCount = hods.length;
-  const totalDeptsCount = departments.length;
-
-  // Calculate Overall College Pass Rate
-  const allExamRecords = students.flatMap((s) => s.examRecords || []);
-  const totalExamsPublished = allExamRecords.length;
-  const totalPassedExams = allExamRecords.filter((r) => r.overallStatus === 'PASS').length;
-  const collegePassRate = totalExamsPublished > 0 ? (totalPassedExams / totalExamsPublished) * 100 : 0;
-
-  // Export College Report as CSV
-  const exportCollegeReportCSV = () => {
-    if (students.length === 0) {
-      alert('No student records available to export.');
+  // Handle Create Staff / Faculty Member
+  const handleCreateStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!staffId.trim() || !staffName.trim() || !staffDept) {
+      setAccountMessage({ type: 'error', text: 'Please fill in required faculty details.' });
       return;
     }
 
-    let csvContent = 'data:text/csv;charset=utf-8,';
-    csvContent += 'Register Number,Student Name,Department,Year,Semester,Batch,Email,Attendance %,Total Exams,Pass Rate %\n';
+    const cleanId = staffId.trim().toUpperCase();
 
-    students.forEach((st) => {
-      const records = st.examRecords || [];
-      const passCount = records.filter((r) => r.overallStatus === 'PASS').length;
-      const rate = records.length > 0 ? ((passCount / records.length) * 100).toFixed(1) : '0.0';
-      const att = st.attendance ? `${st.attendance.percentage.toFixed(1)}%` : 'N/A';
+    // Check if ID already exists
+    if (staff.some((s) => s.staffId.toUpperCase() === cleanId)) {
+      setAccountMessage({ type: 'error', text: `Staff ID "${cleanId}" already exists.` });
+      return;
+    }
 
-      csvContent += `"${st.registerNumber}","${st.name}","${st.department}",${st.year},${st.currentSemester},"${st.batch}","${st.email}","${att}",${records.length},"${rate}%"\n`;
-    });
+    const newStaff: StaffMember = {
+      staffId: cleanId,
+      name: staffName.trim(),
+      password: staffPassword || 'staff@123',
+      email: staffEmail.trim() || `${cleanId.toLowerCase()}@jayasakthi.edu`,
+      phone: staffPhone.trim() || undefined,
+      department: staffDept,
+      designation: staffDesignation.trim() || 'Assistant Professor',
+      isCC: staffIsCC,
+      ccYear: staffIsCC ? staffCcYear : undefined,
+      ccSemester: staffIsCC ? staffCcSem : undefined,
+      ccBatch: staffIsCC ? staffCcBatch.trim() : undefined,
+    };
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `college_academic_report_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      await saveStaffInFirestore(newStaff);
+      if (onAddStaff) onAddStaff(newStaff);
+      setStaffId('');
+      setStaffName('');
+      setStaffEmail('');
+      setStaffPhone('');
+      setStaffIsCC(false);
+      setAccountMessage({
+        type: 'success',
+        text: `Staff Account (${newStaff.name} - ${newStaff.department}) created successfully!`,
+      });
+      setTimeout(() => setAccountMessage(null), 4000);
+    } catch (err: any) {
+      setAccountMessage({ type: 'error', text: err?.message || 'Failed to create Staff account.' });
+    }
+  };
+
+  // Handle Create Subject
+  const handleCreateSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subjCode.trim() || !subjName.trim()) {
+      setSubjMessage({ type: 'error', text: 'Please enter subject code and name.' });
+      return;
+    }
+
+    const newSubj: Subject = {
+      code: subjCode.trim().toUpperCase(),
+      name: subjName.trim(),
+      department: subjDept,
+      semester: subjSem,
+      maxMarks: 100,
+      credits: 3,
+    };
+
+    try {
+      await saveSubjectInFirestore(newSubj);
+      if (onAddSubject) onAddSubject(newSubj);
+      setSubjCode('');
+      setSubjName('');
+      setSubjectFilterSem(subjSem); // Automatically switch view to the added semester
+      setSubjMessage({ type: 'success', text: `Subject ${newSubj.code} added to Semester ${subjSem}!` });
+      setTimeout(() => setSubjMessage(null), 3500);
+    } catch (err: any) {
+      setSubjMessage({ type: 'error', text: err?.message || 'Failed to create subject.' });
+    }
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-6 space-y-6">
-      {/* ADMIN HERO HEADER */}
-      <div className="bg-gradient-to-r from-[#0B2238] via-slate-900 to-blue-950 text-white rounded-3xl p-6 shadow-xl border border-blue-900/50">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 bg-amber-400 text-slate-950 rounded-2xl flex items-center justify-center font-bold shadow-lg">
-              <ShieldCheck className="w-7 h-7 text-[#0B2238]" />
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* ========================================================================= */}
+      {/* 1. EXECUTIVE ADMINISTRATION HEADER BANNER (MATCHES SCREENSHOT) */}
+      {/* ========================================================================= */}
+      <div className="bg-gradient-to-br from-[#0c1427] via-[#101b3b] to-[#0c1427] p-6 sm:p-7 rounded-3xl border border-slate-800 shadow-xl text-white relative overflow-hidden space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-4">
+            {/* Yellow Building / Central Admin Icon Badge */}
+            <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-bold shrink-0 shadow-md">
+              <Building2 className="w-7 h-7 stroke-[2.5]" />
             </div>
-            <div>
-              <span className="text-xs text-amber-300 font-extrabold uppercase tracking-widest block">
-                EXECUTIVE ADMINISTRATION
-              </span>
-              <h2 className="text-2xl font-black text-white">Main Administrator Portal</h2>
-              <p className="text-xs text-blue-200 mt-0.5">
-                Complete control over Departments, HOD Accounts, Staff & College-wide Performance Reports
+
+            <div className="space-y-1">
+              <div className="text-amber-400 font-extrabold text-[11px] tracking-widest uppercase flex items-center gap-1.5">
+                <span>Executive Administration</span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Main Administrator Portal
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 font-normal">
+                Complete control over Departments, HOD Accounts, Staff &amp; College-wide Performance Reports
               </p>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-2xl border border-white/10 text-xs font-mono">
-            <span className="text-amber-300 font-bold">Admin ID:</span>
-            <span className="text-white font-black">ADMIN</span>
+        {/* Dark Pill Badge: Admin ID */}
+        <div className="bg-slate-900/90 border border-slate-700/80 rounded-2xl px-4 py-2.5 inline-flex items-center gap-2 max-w-sm shadow-inner">
+          <span className="text-amber-400 font-bold text-xs">Admin ID:</span>
+          <span className="text-white font-black text-xs tracking-wider">
+            {currentUser?.id || 'ADMIN'}
+          </span>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 2. STATS & METRICS CARDS (MATCHES SCREENSHOT) */}
+      {/* ========================================================================= */}
+      <div className="space-y-4">
+        {/* 2x2 Grid for the top 4 counts */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+          {/* 1. Departments */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm text-center space-y-1">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              Departments
+            </span>
+            <div className="text-3xl sm:text-4xl font-black text-blue-900">
+              {departments.length}
+            </div>
+          </div>
+
+          {/* 2. HOD Accounts */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm text-center space-y-1">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              HOD Accounts
+            </span>
+            <div className="text-3xl sm:text-4xl font-black text-amber-600">
+              {hods.length}
+            </div>
+          </div>
+
+          {/* 3. Staff Members */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm text-center space-y-1">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              Staff Members
+            </span>
+            <div className="text-3xl sm:text-4xl font-black text-emerald-700">
+              {staff.length}
+            </div>
+          </div>
+
+          {/* 4. Total Students */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm text-center space-y-1">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              Total Students
+            </span>
+            <div className="text-3xl sm:text-4xl font-black text-indigo-900">
+              {students.length}
+            </div>
+          </div>
+        </div>
+
+        {/* Full-width College Pass Rate Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm text-center space-y-1">
+          <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            College Pass Rate
+          </span>
+          <div className="text-3xl sm:text-4xl font-black text-blue-600">
+            {collegePassRate}
           </div>
         </div>
       </div>
 
-      {/* ADMIN STATS SUMMARY BAR */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">DEPARTMENTS</span>
-          <span className="text-2xl font-black text-blue-900 block mt-1">{totalDeptsCount}</span>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">HOD ACCOUNTS</span>
-          <span className="text-2xl font-black text-amber-600 block mt-1">{totalHodsCount}</span>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">STAFF MEMBERS</span>
-          <span className="text-2xl font-black text-emerald-600 block mt-1">{totalStaffCount}</span>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">TOTAL STUDENTS</span>
-          <span className="text-2xl font-black text-purple-600 block mt-1">{totalStudentsCount}</span>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center col-span-2 md:col-span-1">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">COLLEGE PASS RATE</span>
-          <span className="text-2xl font-black text-indigo-700 block mt-1">{collegePassRate.toFixed(1)}%</span>
+      {/* ========================================================================= */}
+      {/* 3. SUB-NAVIGATION PILLS (MATCHES SCREENSHOT) */}
+      {/* ========================================================================= */}
+      <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-200">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Pill 1: Departments */}
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('departments')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeSubTab === 'departments'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Building2 className={`w-4 h-4 ${activeSubTab === 'departments' ? 'text-amber-400' : 'text-slate-500'}`} />
+            <span>Departments ({departments.length})</span>
+          </button>
+
+          {/* Pill 2: HOD & Staff Accounts */}
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('hods')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeSubTab === 'hods'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <UserCheck className={`w-4 h-4 ${activeSubTab === 'hods' ? 'text-amber-400' : 'text-slate-500'}`} />
+            <span>HOD &amp; Staff Accounts ({hods.length + staff.length})</span>
+          </button>
+
+          {/* Pill 3: Curriculum Subjects */}
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('subjects')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeSubTab === 'subjects'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <BookOpen className={`w-4 h-4 ${activeSubTab === 'subjects' ? 'text-amber-400' : 'text-slate-500'}`} />
+            <span>Curriculum Subjects ({subjects.length})</span>
+          </button>
+
+          {/* Pill 4: College Reports */}
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('reports')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeSubTab === 'reports'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <TrendingUp className={`w-4 h-4 ${activeSubTab === 'reports' ? 'text-amber-400' : 'text-slate-500'}`} />
+            <span>College Reports</span>
+          </button>
+
+          {/* Pill 5: All Records Overview */}
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('overview')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeSubTab === 'overview'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Search className={`w-4 h-4 ${activeSubTab === 'overview' ? 'text-amber-400' : 'text-slate-500'}`} />
+            <span>All Records Overview</span>
+          </button>
         </div>
       </div>
 
-      {/* NAVIGATION TABS */}
-      <div className="bg-white rounded-2xl p-2 shadow-sm border border-gray-200 flex flex-wrap gap-2">
-        <button
-          onClick={() => setActiveTab('departments')}
-          className={`py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'departments'
-              ? 'bg-[#0B2238] text-white shadow-md'
-              : 'bg-slate-50 hover:bg-slate-100 text-gray-700'
-          }`}
-        >
-          <Building2 className="w-4 h-4 text-amber-400" />
-          <span>DEPARTMENTS ({departments.length})</span>
-        </button>
+      {/* ========================================================================= */}
+      {/* 4. ACTIVE SUB-TAB CONTENT */}
+      {/* ========================================================================= */}
 
-        <button
-          onClick={() => setActiveTab('hods')}
-          className={`py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'hods'
-              ? 'bg-[#0B2238] text-white shadow-md'
-              : 'bg-slate-50 hover:bg-slate-100 text-gray-700'
-          }`}
-        >
-          <UserCheck className="w-4 h-4 text-amber-400" />
-          <span>HOD ACCOUNTS ({hods.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('subjects')}
-          className={`py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'subjects'
-              ? 'bg-[#0B2238] text-white shadow-md'
-              : 'bg-slate-50 hover:bg-slate-100 text-gray-700'
-          }`}
-        >
-          <BookOpen className="w-4 h-4 text-amber-400" />
-          <span>CURRICULUM SUBJECTS ({subjects.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'reports'
-              ? 'bg-[#0B2238] text-white shadow-md'
-              : 'bg-slate-50 hover:bg-slate-100 text-gray-700'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4 text-amber-400" />
-          <span>COLLEGE REPORTS</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('global')}
-          className={`py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'global'
-              ? 'bg-[#0B2238] text-white shadow-md'
-              : 'bg-slate-50 hover:bg-slate-100 text-gray-700'
-          }`}
-        >
-          <Search className="w-4 h-4 text-amber-400" />
-          <span>ALL RECORDS OVERVIEW</span>
-        </button>
-      </div>
-
-      {/* TAB 1: DEPARTMENTS MANAGEMENT */}
-      {activeTab === 'departments' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Add Department Form */}
-          <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-md h-fit space-y-4">
-            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+      {/* TAB A: DEPARTMENTS (MATCHES SCREENSHOT FORM) */}
+      {activeSubTab === 'departments' && (
+        <div className="space-y-6">
+          {/* Add New Department Form Card (EXACT MATCH TO SCREENSHOT) */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-5">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
               <PlusCircle className="w-5 h-5 text-blue-600" />
-              <h3 className="font-extrabold text-gray-900 text-sm">Add New Department</h3>
+              <h2 className="text-base font-bold text-slate-900">
+                Add New Department
+              </h2>
             </div>
 
             {deptMessage && (
               <div
-                className={`text-xs p-3 rounded-xl ${
+                className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
                   deptMessage.type === 'success'
                     ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-red-50 text-red-800 border border-red-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
                 }`}
               >
-                {deptMessage.text}
+                {deptMessage.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600" />
+                )}
+                <span>{deptMessage.text}</span>
               </div>
             )}
 
-            <form onSubmit={handleAddDepartment} className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
+            <form onSubmit={handleCreateDepartment} className="space-y-4">
+              {/* Field 1: Department Code */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
                   Department Code (e.g. CSE, AIDS)
                 </label>
                 <input
                   type="text"
-                  value={newDeptCode}
-                  onChange={(e) => setNewDeptCode(e.target.value)}
-                  placeholder="e.g. AIDS"
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl font-mono uppercase text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  value={deptCode}
+                  onChange={(e) => setDeptCode(e.target.value.toUpperCase())}
+                  placeholder="E.G.  AIDS"
+                  required
+                  className="w-full py-3 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-slate-50/50"
                 />
               </div>
 
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
+              {/* Field 2: Full Department Name */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
                   Full Department Name
                 </label>
                 <input
                   type="text"
-                  value={newDeptName}
-                  onChange={(e) => setNewDeptName(e.target.value)}
+                  value={deptName}
+                  onChange={(e) => setDeptName(e.target.value)}
                   placeholder="e.g. Artificial Intelligence and Data Science"
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  required
+                  className="w-full py-3 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-slate-50/50"
                 />
               </div>
 
+              {/* Field 3: Degree Program */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  Degree Category
+                </label>
+                <div className="grid grid-cols-2 gap-2 max-w-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDeptDegree('B.E')}
+                    className={`py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer border ${
+                      deptDegree === 'B.E'
+                        ? 'bg-blue-900 text-white border-blue-950 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    B.E Program
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeptDegree('B.Tech')}
+                    className={`py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer border ${
+                      deptDegree === 'B.Tech'
+                        ? 'bg-blue-900 text-white border-blue-950 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    B.Tech Program
+                  </button>
+                </div>
+              </div>
+
+              {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl shadow transition-all cursor-pointer"
+                className="w-full py-3.5 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-md transition cursor-pointer flex items-center justify-center gap-2"
               >
-                + CREATE DEPARTMENT
+                <span>+ Create Department</span>
               </button>
             </form>
           </div>
 
-          {/* Departments List */}
-          <div className="lg:col-span-2 space-y-3">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-              ACTIVE COLLEGE DEPARTMENTS ({departments.length})
-            </h3>
+          {/* List of Registered Departments */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                  Configured Academic Departments ({departments.length})
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Categorized by Bachelor of Technology (B.Tech) and Bachelor of Engineering (B.E) programs
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold bg-teal-50 text-teal-900 border border-teal-200 px-2.5 py-1 rounded-lg">
+                  {departments.filter((d) => (d.degree || (['AIDS', 'PHARMA', 'BIO-TECH'].includes(d.code) ? 'B.Tech' : 'B.E')) === 'B.Tech').length} B.Tech Programs
+                </span>
+                <span className="text-[11px] font-bold bg-blue-50 text-blue-900 border border-blue-200 px-2.5 py-1 rounded-lg">
+                  {departments.filter((d) => (d.degree || (['AIDS', 'PHARMA', 'BIO-TECH'].includes(d.code) ? 'B.Tech' : 'B.E')) === 'B.E').length} B.E Programs
+                </span>
+              </div>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {departments.map((dept) => {
-                const deptHod = hods.find((h) => h.department === dept.code);
-                const deptStaffCount = staffMembers.filter((s) => s.department === dept.code).length;
-                const deptStudentCount = students.filter((s) => s.department === dept.code).length;
-
-                return (
-                  <div
-                    key={dept.code}
-                    className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all relative group"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="font-mono font-black text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 inline-block mb-1">
-                          {dept.code}
-                        </span>
-                        <h4 className="font-bold text-gray-900 text-sm leading-tight">{dept.name}</h4>
-                        {dept.description ? (
-                          <p className="text-[11px] text-gray-500 mt-0.5">{dept.description}</p>
-                        ) : null}
-                      </div>
-
-                      <button
-                        onClick={() => handleDeleteDepartment(dept.code)}
-                        className="text-gray-300 hover:text-red-600 p-1 rounded-lg transition-colors cursor-pointer"
-                        title="Delete Department"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-3 text-center text-[11px]">
-                      <div>
-                        <span className="text-[9px] text-gray-400 font-bold block uppercase">HOD</span>
-                        <span className="font-bold text-gray-800 truncate block">
-                          {deptHod ? deptHod.name.split(' ')[0] : 'Not Set'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-gray-400 font-bold block uppercase">STAFF</span>
-                        <span className="font-bold text-emerald-700">{deptStaffCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-gray-400 font-bold block uppercase">STUDENTS</span>
-                        <span className="font-bold text-purple-700">{deptStudentCount}</span>
-                      </div>
-                    </div>
+            {/* Two Column Layout: Left Side B.Tech & Right Side B.E */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column: B.Tech. (Bachelor of Technology) */}
+              <div className="space-y-3.5 p-4 rounded-2xl bg-teal-50/40 border border-teal-200/60">
+                <div className="flex items-center justify-between pb-2 border-b border-teal-200/80">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-teal-700" />
+                    <h4 className="text-xs font-black uppercase tracking-wider text-teal-950">
+                      B.Tech. Programs (Bachelor of Technology)
+                    </h4>
                   </div>
-                );
-              })}
+                  <span className="text-[11px] font-bold text-teal-800 font-mono">
+                    {departments.filter((d) => (d.degree || (['AIDS', 'PHARMA', 'BIO-TECH'].includes(d.code) ? 'B.Tech' : 'B.E')) === 'B.Tech').length} Depts
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {departments
+                    .filter((d) => (d.degree || (['AIDS', 'PHARMA', 'BIO-TECH'].includes(d.code) ? 'B.Tech' : 'B.E')) === 'B.Tech')
+                    .map((d) => {
+                      const deptHods = hods.filter((h) => h.department === d.code);
+                      const deptStaff = staff.filter((s) => s.department === d.code);
+                      const deptStudents = students.filter((st) => st.department === d.code);
+
+                      return (
+                        <div
+                          key={d.code}
+                          className="p-4 rounded-2xl border border-teal-100 bg-white hover:border-teal-300 transition-all space-y-3 shadow-2xs"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-black text-teal-900 bg-teal-100 px-2 py-0.5 rounded-md">
+                                  {d.code}
+                                </span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-700 text-white">
+                                  B.Tech
+                                </span>
+                              </div>
+                              <h5 className="text-xs font-bold text-slate-900 leading-snug">
+                                {d.name}
+                              </h5>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeleteConfirmTarget({
+                                  type: 'department',
+                                  id: d.code,
+                                  name: d.name,
+                                  extraInfo: `Degree: B.Tech | Enrolled Students: ${deptStudents.length}`,
+                                })
+                              }
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title={`Delete Department ${d.code}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-1 text-center pt-2 border-t border-teal-50 text-[11px]">
+                            <div className="bg-slate-50 py-1 rounded-lg">
+                              <span className="text-slate-400 block text-[9px] uppercase font-bold">HODs</span>
+                              <span className="font-bold text-slate-800">{deptHods.length}</span>
+                            </div>
+                            <div className="bg-slate-50 py-1 rounded-lg">
+                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Faculty</span>
+                              <span className="font-bold text-slate-800">{deptStaff.length}</span>
+                            </div>
+                            <div className="bg-slate-50 py-1 rounded-lg">
+                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Students</span>
+                              <span className="font-bold text-slate-800">{deptStudents.length}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {departments.filter((d) => (d.degree || (['AIDS', 'PHARMA', 'BIO-TECH'].includes(d.code) ? 'B.Tech' : 'B.E')) === 'B.Tech').length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-6">No B.Tech departments configured</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: B.E. (Bachelor of Engineering) */}
+              <div className="space-y-3.5 p-4 rounded-2xl bg-slate-50/60 border border-slate-200/80">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-900" />
+                    <h4 className="text-xs font-black uppercase tracking-wider text-blue-950">
+                      B.E. Programs (Bachelor of Engineering)
+                    </h4>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-500 font-mono">
+                    {departments.filter((d) => (d.degree || (['AIDS', 'PHARMA', 'BIO-TECH'].includes(d.code) ? 'B.Tech' : 'B.E')) === 'B.E').length} Depts
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {departments
+                    .filter((d) => (d.degree || (['AIDS', 'PHARMA', 'BIO-TECH'].includes(d.code) ? 'B.Tech' : 'B.E')) === 'B.E')
+                    .map((d) => {
+                      const deptHods = hods.filter((h) => h.department === d.code);
+                      const deptStaff = staff.filter((s) => s.department === d.code);
+                      const deptStudents = students.filter((st) => st.department === d.code);
+
+                      return (
+                        <div
+                          key={d.code}
+                          className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-blue-300 transition-all space-y-3 shadow-2xs"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-black text-blue-900 bg-blue-100 px-2 py-0.5 rounded-md">
+                                  {d.code}
+                                </span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-900 text-white">
+                                  B.E
+                                </span>
+                              </div>
+                              <h5 className="text-xs font-bold text-slate-900 leading-snug">
+                                {d.name}
+                              </h5>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeleteConfirmTarget({
+                                  type: 'department',
+                                  id: d.code,
+                                  name: d.name,
+                                  extraInfo: `Degree: B.E | Enrolled Students: ${deptStudents.length}`,
+                                })
+                              }
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title={`Delete Department ${d.code}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-1 text-center pt-2 border-t border-slate-100 text-[11px]">
+                            <div className="bg-slate-50 py-1 rounded-lg">
+                              <span className="text-slate-400 block text-[9px] uppercase font-bold">HODs</span>
+                              <span className="font-bold text-slate-800">{deptHods.length}</span>
+                            </div>
+                            <div className="bg-slate-50 py-1 rounded-lg">
+                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Faculty</span>
+                              <span className="font-bold text-slate-800">{deptStaff.length}</span>
+                            </div>
+                            <div className="bg-slate-50 py-1 rounded-lg">
+                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Students</span>
+                              <span className="font-bold text-slate-800">{deptStudents.length}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {departments.filter((d) => (d.degree || (['AIDS', 'PHARMA', 'BIO-TECH'].includes(d.code) ? 'B.Tech' : 'B.E')) === 'B.E').length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-6">No B.E departments configured</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 2: HOD ACCOUNTS MANAGEMENT */}
-      {activeTab === 'hods' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Create HOD Form */}
-          <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-md h-fit space-y-4">
-            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-              <UserCheck className="w-5 h-5 text-amber-600" />
-              <h3 className="font-extrabold text-gray-900 text-sm">Create HOD Account</h3>
+      {/* TAB B: HOD & STAFF ACCOUNTS */}
+      {activeSubTab === 'hods' && (
+        <div className="space-y-6">
+          {/* Account Provisioning Card with Role Selector */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    Provision Academic &amp; Faculty Accounts
+                  </h2>
+                  <p className="text-[11px] text-slate-500">
+                    Select the role below to configure login credentials and department assignments
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Counter Badges */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg">
+                  {hods.length} HODs
+                </span>
+                <span className="text-[11px] font-bold bg-blue-50 text-blue-900 border border-blue-200 px-2.5 py-1 rounded-lg">
+                  {staff.length} Staff
+                </span>
+              </div>
             </div>
 
-            {hodMessage && (
+            {/* Role Selection Option: HOD vs Staff */}
+            <div className="space-y-2">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                1. Select Account Role to Add:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Option 1: Head of Department (HOD) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountRole('hod');
+                    setAccountMessage(null);
+                  }}
+                  className={`p-4 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${
+                    accountRole === 'hod'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-950 ring-2 ring-amber-500/20 shadow-xs'
+                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0 transition ${
+                        accountRole === 'hod'
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black tracking-tight text-slate-900">
+                        <span>Head of Department (HOD)</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center">
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        accountRole === 'hod'
+                          ? 'border-amber-500 bg-amber-500'
+                          : 'border-slate-300 bg-white'
+                      }`}
+                    >
+                      {accountRole === 'hod' && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Option 2: Faculty */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountRole('staff');
+                    setAccountMessage(null);
+                  }}
+                  className={`p-4 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${
+                    accountRole === 'staff'
+                      ? 'bg-blue-900/10 border-blue-900 text-blue-950 ring-2 ring-blue-900/20 shadow-xs'
+                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0 transition ${
+                        accountRole === 'staff'
+                          ? 'bg-blue-900 text-white shadow-xs'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black tracking-tight text-slate-900">
+                        <span>Faculty</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center">
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        accountRole === 'staff'
+                          ? 'border-blue-900 bg-blue-900'
+                          : 'border-slate-300 bg-white'
+                      }`}
+                    >
+                      {accountRole === 'staff' && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Notification alert banner */}
+            {accountMessage && (
               <div
-                className={`text-xs p-3 rounded-xl ${
-                  hodMessage.type === 'success'
+                className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in ${
+                  accountMessage.type === 'success'
                     ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-red-50 text-red-800 border border-red-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
                 }`}
               >
-                {hodMessage.text}
+                {accountMessage.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                )}
+                <span>{accountMessage.text}</span>
               </div>
             )}
 
-            <form onSubmit={handleAddHod} className="space-y-3 text-xs">
+            {/* FORM 1: IF HOD IS SELECTED */}
+            {accountRole === 'hod' && (
+              <div className="space-y-4 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    2. Enter Details for New Department HOD:
+                  </h3>
+                </div>
+
+                <form onSubmit={handleCreateHod} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Field 1: HOD User ID */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      HOD User ID <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={hodId}
+                      onChange={(e) => setHodId(e.target.value.toUpperCase())}
+                      placeholder="e.g. HOD_CSE or HOD_AIDS"
+                      required
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Field 2: Faculty Name */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Faculty / HOD Full Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={hodName}
+                      onChange={(e) => setHodName(e.target.value)}
+                      placeholder="e.g. Dr. K. Ramesh, M.E., Ph.D."
+                      required
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Field 3: Department */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Department Assignment <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={hodDept}
+                      onChange={(e) => setHodDept(e.target.value)}
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    >
+                      {departments.map((d) => (
+                        <option key={d.code} value={d.code}>
+                          {d.code} - {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Field 4: Email */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Official Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={hodEmail}
+                      onChange={(e) => setHodEmail(e.target.value)}
+                      placeholder="e.g. hod.cse@jayasakthi.edu"
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Field 5: Default Password */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Default Login Password <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={hodPassword}
+                      onChange={(e) => setHodPassword(e.target.value)}
+                      placeholder="hod@123"
+                      required
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 font-mono focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Field 6: Phone Number */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Contact Phone (Optional)
+                    </label>
+                    <input
+                      type="tel"
+                      value={hodPhone}
+                      onChange={(e) => setHodPhone(e.target.value)}
+                      placeholder="e.g. +91 98765 43210"
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="sm:col-span-2 pt-2">
+                    <button
+                      type="submit"
+                      className="w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                      <span>Create &amp; Provision HOD Account</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* FORM 2: IF STAFF IS SELECTED */}
+            {accountRole === 'staff' && (
+              <div className="space-y-4 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-900"></span>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    2. Enter Details for New Faculty :
+                  </h3>
+                </div>
+
+                <form onSubmit={handleCreateStaff} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Field 1: Staff ID */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Faculty / Staff ID <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={staffId}
+                      onChange={(e) => setStaffId(e.target.value.toUpperCase())}
+                      placeholder="e.g. STAFF_CSE01 or FAC101"
+                      required
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Field 2: Staff Name */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Staff / Faculty Full Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={staffName}
+                      onChange={(e) => setStaffName(e.target.value)}
+                      placeholder="e.g. Prof. A. Suresh, M.E."
+                      required
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Field 3: Department */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Department Assignment <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={staffDept}
+                      onChange={(e) => setStaffDept(e.target.value)}
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                    >
+                      {departments.map((d) => (
+                        <option key={d.code} value={d.code}>
+                          {d.code} - {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Field 4: Academic Designation */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Designation
+                    </label>
+                    <select
+                      value={staffDesignation}
+                      onChange={(e) => setStaffDesignation(e.target.value)}
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                    >
+                      <option value="Assistant Professor">Assistant Professor</option>
+                      <option value="Associate Professor">Associate Professor</option>
+                      <option value="Professor">Professor</option>
+                    </select>
+                  </div>
+
+                  {/* Field 5: Email */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Official Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={staffEmail}
+                      onChange={(e) => setStaffEmail(e.target.value)}
+                      placeholder="e.g. suresh.cse@jayasakthi.edu"
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Field 6: Default Password */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Default Login Password <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={staffPassword}
+                      onChange={(e) => setStaffPassword(e.target.value)}
+                      placeholder="staff@123"
+                      required
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 font-mono focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Field 7: Contact Phone */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      Contact Phone (Optional)
+                    </label>
+                    <input
+                      type="tel"
+                      value={staffPhone}
+                      onChange={(e) => setStaffPhone(e.target.value)}
+                      placeholder="e.g. +91 98765 43211"
+                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Field 8: Class Counselor (CC) Assignment Box */}
+                  <div className="space-y-2 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 sm:col-span-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={staffIsCC}
+                        onChange={(e) => setStaffIsCC(e.target.checked)}
+                        className="w-4 h-4 rounded text-blue-900 focus:ring-blue-900 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-slate-800">
+                        Assign as Class Counselor (CC) / Year In-charge
+                      </span>
+                    </label>
+
+                    {staffIsCC && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            Academic Year
+                          </label>
+                          <select
+                            value={staffCcYear}
+                            onChange={(e) => setStaffCcYear(Number(e.target.value))}
+                            className="w-full mt-1 py-1.5 px-2.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-900 bg-white"
+                          >
+                            <option value={1}>1st Year</option>
+                            <option value={2}>2nd Year</option>
+                            <option value={3}>3rd Year</option>
+                            <option value={4}>4th Year</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            In-charge Semester
+                          </label>
+                          <select
+                            value={staffCcSem}
+                            onChange={(e) => setStaffCcSem(Number(e.target.value))}
+                            className="w-full mt-1 py-1.5 px-2.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-900 bg-white"
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                              <option key={s} value={s}>
+                                Semester {s}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            Batch / Section
+                          </label>
+                          <input
+                            type="text"
+                            value={staffCcBatch}
+                            onChange={(e) => setStaffCcBatch(e.target.value)}
+                            placeholder="e.g. 2023-2027"
+                            className="w-full mt-1 py-1.5 px-2.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-900 bg-white"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="sm:col-span-2 pt-2">
+                    <button
+                      type="submit"
+                      className="w-full py-3 rounded-xl bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                      <span>Create &amp; Provision Staff Account</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+
+          {/* List of Registered Accounts: HODs & Staff */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
               <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
-                  Department
-                </label>
-                <select
-                  value={newHodDept}
-                  onChange={(e) => setNewHodDept(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                  Registered Faculty &amp; HOD Directory
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Manage login accounts, department credentials, and counselor assignments
+                </p>
+              </div>
+
+              {/* Filter Tabs: All / HODs / Staff */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setFacultyFilterType('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    facultyFilterType === 'all'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
                 >
-                  {departments.length === 0 ? (
-                    <option value="">-- No Departments Available (Add Dept First) --</option>
-                  ) : (
-                    departments.map((d) => (
-                      <option key={d.code} value={d.code}>
-                        {d.code} - {d.name}
-                      </option>
-                    ))
-                  )}
+                  All ({hods.length + staff.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFacultyFilterType('hod')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    facultyFilterType === 'hod'
+                      ? 'bg-white text-amber-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span>HODs ({hods.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFacultyFilterType('staff')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    facultyFilterType === 'staff'
+                      ? 'bg-white text-blue-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-blue-900" />
+                  <span>Staff ({staff.length})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Search and Department Filter Toolbar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2 relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={facultySearchTerm}
+                  onChange={(e) => setFacultySearchTerm(e.target.value)}
+                  placeholder="Search by name, ID, email, or designation..."
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <select
+                  value={facultyFilterDept}
+                  onChange={(e) => setFacultyFilterDept(e.target.value)}
+                  className="w-full py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none"
+                >
+                  <option value="all">All Departments ({departments.length})</option>
+                  {departments.map((d) => (
+                    <option key={d.code} value={d.code}>
+                      {d.code} - {d.name}
+                    </option>
+                  ))}
                 </select>
               </div>
+            </div>
 
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
-                  HOD ID / Username
-                </label>
-                <input
-                  type="text"
-                  value={newHodId}
-                  onChange={(e) => setNewHodId(e.target.value)}
-                  placeholder="e.g. HOD_CSE"
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl font-mono uppercase text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
-                  HOD Name (e.g. Dr. A. Vimal)
-                </label>
-                <input
-                  type="text"
-                  value={newHodName}
-                  onChange={(e) => setNewHodName(e.target.value)}
-                  placeholder="e.g. Dr. A. VIMAL KUMAR"
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
-                  Password
-                </label>
-                <input
-                  type="text"
-                  value={newHodPass}
-                  onChange={(e) => setNewHodPass(e.target.value)}
-                  placeholder="hod123"
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
-                  Official Email
-                </label>
-                <input
-                  type="email"
-                  value={newHodEmail}
-                  onChange={(e) => setNewHodEmail(e.target.value)}
-                  placeholder="hod.cse@jayasakthi.edu"
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-[#0B2238] hover:bg-slate-900 text-amber-400 font-extrabold rounded-xl shadow transition-all cursor-pointer border border-amber-400/30"
-              >
-                + CREATE HOD ACCOUNT
-              </button>
-            </form>
-          </div>
-
-          {/* HOD Accounts List */}
-          <div className="lg:col-span-2 space-y-3">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-              ACTIVE DEPARTMENT HODs ({hods.length})
-            </h3>
-
-            {hods.length === 0 ? (
-              <div className="bg-white p-8 rounded-2xl border border-gray-200 text-center">
-                <UserCheck className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-xs text-gray-500 font-semibold">No HOD accounts created yet.</p>
-                <p className="text-[11px] text-gray-400">Use the form on the left to add HOD accounts for departments.</p>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {hods.map((hod) => (
-                  <div
-                    key={hod.hodId}
-                    className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between gap-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 font-black flex items-center justify-center text-sm">
-                        {hod.department}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-gray-900 text-sm">{hod.name}</h4>
-                          <span className="text-[10px] bg-slate-100 text-gray-700 px-2 py-0.5 rounded font-mono font-bold">
-                            {hod.hodId}
-                          </span>
+            {/* List Grid for Accounts */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {/* Render HODs if included in filter */}
+              {(facultyFilterType === 'all' || facultyFilterType === 'hod') &&
+                hods
+                  .filter((h) => {
+                    const matchesDept = facultyFilterDept === 'all' || h.department === facultyFilterDept;
+                    const q = facultySearchTerm.trim().toLowerCase();
+                    const matchesQuery =
+                      !q ||
+                      h.name.toLowerCase().includes(q) ||
+                      h.hodId.toLowerCase().includes(q) ||
+                      h.email.toLowerCase().includes(q) ||
+                      h.department.toLowerCase().includes(q);
+                    return matchesDept && matchesQuery;
+                  })
+                  .map((h) => (
+                    <div
+                      key={`hod-${h.hodId}`}
+                      className="p-4 rounded-2xl border border-amber-200/80 bg-amber-50/30 space-y-2.5 flex flex-col justify-between hover:shadow-xs transition"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-[10px] font-black text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded">
+                              {h.department}
+                            </span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded">
+                              HOD
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDeleteConfirmTarget({
+                                type: 'hod',
+                                id: h.hodId,
+                                name: h.name,
+                                extraInfo: `Department: ${h.department}`,
+                              })
+                            }
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title={`Delete HOD ${h.hodId}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                        <p className="text-xs text-gray-500">{hod.email} {hod.phone ? `• ${hod.phone}` : ''}</p>
+
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">{h.name}</h4>
+                          <p className="text-[11px] text-slate-500 font-mono">User ID: {h.hodId}</p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-amber-200/60 space-y-1 text-[11px] text-slate-600">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{h.email}</span>
+                        </div>
+                        {h.phone && (
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{h.phone}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
+                  ))}
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-gray-400 bg-slate-50 px-2 py-1 rounded border border-gray-200">
-                        Pass: {hod.password}
-                      </span>
-                      <button
-                        onClick={() => handleDeleteHod(hod.hodId)}
-                        className="p-1.5 text-gray-300 hover:text-red-600 rounded-lg transition-colors cursor-pointer"
-                        title="Delete HOD"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+              {/* Render Staff if included in filter */}
+              {(facultyFilterType === 'all' || facultyFilterType === 'staff') &&
+                staff
+                  .filter((s) => {
+                    const matchesDept = facultyFilterDept === 'all' || s.department === facultyFilterDept;
+                    const q = facultySearchTerm.trim().toLowerCase();
+                    const matchesQuery =
+                      !q ||
+                      s.name.toLowerCase().includes(q) ||
+                      s.staffId.toLowerCase().includes(q) ||
+                      s.email.toLowerCase().includes(q) ||
+                      s.department.toLowerCase().includes(q) ||
+                      (s.designation && s.designation.toLowerCase().includes(q));
+                    return matchesDept && matchesQuery;
+                  })
+                  .map((s) => (
+                    <div
+                      key={`staff-${s.staffId}`}
+                      className="p-4 rounded-2xl border border-blue-200/80 bg-blue-50/30 space-y-2.5 flex flex-col justify-between hover:shadow-xs transition"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-[10px] font-black text-blue-900 bg-blue-200/80 px-2 py-0.5 rounded">
+                              {s.department}
+                            </span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-900 text-white px-2 py-0.5 rounded">
+                              STAFF
+                            </span>
+                            {s.isCC && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded">
+                                CC: Sem {s.ccSemester || s.ccYear || 1}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDeleteConfirmTarget({
+                                type: 'staff',
+                                id: s.staffId,
+                                name: s.name,
+                                extraInfo: `Department: ${s.department} • Role: ${s.designation || 'Staff'}`,
+                              })
+                            }
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title={`Delete Staff ${s.staffId}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">{s.name}</h4>
+                          <p className="text-[11px] text-blue-900 font-medium">{s.designation || 'Faculty Member'}</p>
+                          <p className="text-[11px] text-slate-500 font-mono">Staff ID: {s.staffId}</p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-blue-200/60 space-y-1 text-[11px] text-slate-600">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{s.email}</span>
+                        </div>
+                        {s.phone && (
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{s.phone}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+            </div>
+
+            {/* Empty state */}
+            {((facultyFilterType === 'hod' && hods.length === 0) ||
+              (facultyFilterType === 'staff' && staff.length === 0) ||
+              (hods.length === 0 && staff.length === 0)) && (
+              <div className="text-center py-10 bg-slate-50 rounded-2xl border border-slate-200">
+                <UserCheck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-700">No accounts found</p>
+                <p className="text-[11px] text-slate-400">
+                  Use the form above to provision HOD or Faculty accounts
+                </p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* TAB: CURRICULUM SUBJECTS MANAGEMENT */}
-      {activeTab === 'subjects' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Add Subject Form */}
-          <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-md h-fit space-y-4">
-            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-              <BookOpen className="w-5 h-5 text-blue-600" />
-              <h3 className="font-extrabold text-gray-900 text-sm">Add New Subject</h3>
+      {/* TAB C: CURRICULUM SUBJECTS */}
+      {activeSubTab === 'subjects' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-5">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+              <PlusCircle className="w-5 h-5 text-blue-900" />
+              <h2 className="text-base font-bold text-slate-900">
+                Register Curriculum Course / Subject
+              </h2>
             </div>
 
-            {adminSubMsg && (
+            {subjMessage && (
               <div
-                className={`text-xs p-3 rounded-xl ${
-                  adminSubMsg.type === 'success'
+                className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                  subjMessage.type === 'success'
                     ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-red-50 text-red-800 border border-red-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
                 }`}
               >
-                {adminSubMsg.text}
+                {subjMessage.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600" />
+                )}
+                <span>{subjMessage.text}</span>
               </div>
             )}
 
-            <form onSubmit={handleAdminAddSubject} className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
+            <form onSubmit={handleCreateSubject} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  Course Code
+                </label>
+                <input
+                  id="admin-course-code-input"
+                  type="text"
+                  value={subjCode}
+                  onChange={(e) => setSubjCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. CS8691"
+                  required
+                  className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  Course Name / Title
+                </label>
+                <input
+                  type="text"
+                  value={subjName}
+                  onChange={(e) => setSubjName(e.target.value)}
+                  placeholder="e.g. Artificial Intelligence"
+                  required
+                  className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
                   Department
                 </label>
                 <select
-                  value={adminSubDept}
-                  onChange={(e) => setAdminSubDept(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  value={subjDept}
+                  onChange={(e) => setSubjDept(e.target.value)}
+                  className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-white"
                 >
                   {departments.map((d) => (
                     <option key={d.code} value={d.code}>
@@ -707,360 +1619,451 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </select>
               </div>
 
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
-                  Subject Code
-                </label>
-                <input
-                  type="text"
-                  value={adminSubCode}
-                  onChange={(e) => setAdminSubCode(e.target.value)}
-                  placeholder="e.g. CS8651"
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl font-mono uppercase text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
-                  Subject Title
-                </label>
-                <input
-                  type="text"
-                  value={adminSubName}
-                  onChange={(e) => setAdminSubName(e.target.value)}
-                  placeholder="e.g. Internet Programming"
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 uppercase tracking-wider block mb-1">
-                  Semester
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  Semester (1 - 8)
                 </label>
                 <select
-                  value={adminSubSem}
-                  onChange={(e) => setAdminSubSem(Number(e.target.value))}
-                  className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl font-bold text-gray-900"
+                  value={subjSem}
+                  onChange={(e) => setSubjSem(Number(e.target.value))}
+                  className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-white"
                 >
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
-                    <option key={sem} value={sem}>
-                      Sem {sem}
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                    <option key={s} value={s}>
+                      Semester {s}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl shadow transition-all cursor-pointer"
-              >
-                + ADD SUBJECT
-              </button>
+              <div className="sm:col-span-2 pt-2">
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition"
+                >
+                  + Add Course to Curriculum
+                </button>
+              </div>
             </form>
           </div>
 
-          {/* Subjects List */}
-          <div className="lg:col-span-2 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                CURRICULUM SUBJECTS ({subjects.filter((s) => adminSubFilterDept === 'ALL' || s.department === adminSubFilterDept).length})
-              </h3>
+          {/* Subjects Section with Semester List View */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-6">
+            {/* Header with Title and Right-Side Filters */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-blue-900" />
+                  <span>Configured Subjects</span>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-900 border border-blue-200">
+                    Semester {subjectFilterSem} &bull; {filteredSubjects.length} Courses
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Select a semester on the left and filter by department on the right to manage curriculum.
+                </p>
+              </div>
 
-              {/* Department Filter Pills */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
-                <button
-                  onClick={() => setAdminSubFilterDept('ALL')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
-                    adminSubFilterDept === 'ALL'
-                      ? 'bg-[#0B2238] text-white'
-                      : 'bg-slate-100 text-gray-600 hover:bg-slate-200'
-                  }`}
-                >
-                  ALL
-                </button>
-                {departments.map((d) => (
-                  <button
-                    key={d.code}
-                    onClick={() => setAdminSubFilterDept(d.code)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
-                      adminSubFilterDept === d.code
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 text-gray-600 hover:bg-slate-200'
-                    }`}
+              {/* Right Side Controls: Department Selection Dropdown & Search Box */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Department Selection Dropdown */}
+                <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
+                  <Building2 className="w-3.5 h-3.5 text-blue-900 shrink-0" />
+                  <label htmlFor="admin-dept-filter-select" className="text-xs font-bold text-slate-600 shrink-0">
+                    Dept:
+                  </label>
+                  <select
+                    id="admin-dept-filter-select"
+                    value={subjectFilterDept}
+                    onChange={(e) => setSubjectFilterDept(e.target.value)}
+                    className="py-1 px-2 rounded-lg text-xs font-bold text-slate-800 bg-white border border-slate-200 focus:ring-2 focus:ring-blue-900 focus:outline-none cursor-pointer"
                   >
-                    {d.code}
-                  </button>
-                ))}
+                    <option value="all">All Departments</option>
+                    {departments.map((d) => (
+                      <option key={d.code} value={d.code}>
+                        {d.code} - {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Search Box */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={subjectSearchQuery}
+                    onChange={(e) => setSubjectSearchQuery(e.target.value)}
+                    placeholder={`Search Sem ${subjectFilterSem}...`}
+                    className="pl-8 pr-8 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-900 bg-slate-50/70 focus:bg-white focus:ring-2 focus:ring-blue-900 focus:outline-none w-44"
+                  />
+                  {subjectSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSubjectSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
-            {subjects.filter((s) => adminSubFilterDept === 'ALL' || s.department === adminSubFilterDept).length === 0 ? (
-              <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm text-center space-y-2">
-                <BookOpen className="w-8 h-8 text-gray-300 mx-auto" />
-                <p className="text-xs font-bold text-gray-600">No subjects found.</p>
-                <p className="text-[11px] text-gray-400">Use the form on the left to add subjects to the college curriculum.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto bg-white rounded-2xl border border-gray-200 shadow-sm">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-[#0B2238] text-white font-bold uppercase text-[10px]">
-                      <th className="py-2.5 px-3 rounded-l-lg">Dept</th>
-                      <th className="py-2.5 px-3">Sub Code</th>
-                      <th className="py-2.5 px-3">Subject Name</th>
-                      <th className="py-2.5 px-3 text-center">Semester</th>
-                      <th className="py-2.5 px-3 text-right rounded-r-lg">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 font-medium">
-                    {subjects
-                      .filter((s) => adminSubFilterDept === 'ALL' || s.department === adminSubFilterDept)
-                      .map((sub, idx) => {
-                        const isEditing = adminEditingSubCode === sub.code;
-                        return (
-                          <tr key={sub.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                            <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-extrabold text-[10px]">
-                                {sub.department}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 font-mono font-bold text-gray-900">{sub.code}</td>
-                            <td className="py-2.5 px-3 font-bold text-gray-900">
-                              {isEditing ? (
-                                <input
-                                  type="text"
-                                  value={adminEditSubName}
-                                  onChange={(e) => setAdminEditSubName(e.target.value)}
-                                  className="w-full p-1.5 bg-slate-50 border border-gray-300 rounded text-xs text-gray-900 font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                                />
-                              ) : (
-                                sub.name
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-center font-bold text-gray-700">
-                              {isEditing ? (
-                                <select
-                                  value={adminEditSubSem}
-                                  onChange={(e) => setAdminEditSubSem(Number(e.target.value))}
-                                  className="p-1 bg-slate-50 border border-gray-300 rounded text-xs font-bold text-gray-900"
-                                >
-                                  {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
-                                    <option key={sem} value={sem}>
-                                      Sem {sem}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                `Sem ${sub.semester}`
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              {isEditing ? (
-                                <div className="flex items-center justify-end gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAdminSaveEditSubject(sub.code)}
-                                    className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all cursor-pointer"
-                                    title="Save Subject"
-                                  >
-                                    <Save className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setAdminEditingSubCode(null)}
-                                    className="p-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all cursor-pointer"
-                                    title="Cancel"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-end gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAdminStartEditSubject(sub)}
-                                    className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-all cursor-pointer border border-blue-200"
-                                    title="Edit Subject"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAdminDeleteSubject(sub.code)}
-                                    className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-all cursor-pointer border border-red-200"
-                                    title="Delete Subject"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+            {/* List View Layout: Semester List on Left / Table on Right */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Semester List View (Even Semesters on Left, Odd Semesters on Right) */}
+              <div className="lg:col-span-5 xl:col-span-4 space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-blue-900" />
+                    Semester List
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400">8 Semesters</span>
+                </div>
 
-      {/* TAB 3: COLLEGE-WIDE REPORTS & ANALYTICS */}
-      {activeTab === 'reports' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-black text-gray-900">College Academic Reports & Analytics</h3>
-              <p className="text-xs text-gray-500">Comprehensive performance stats across all engineering departments</p>
-            </div>
-
-            <button
-              onClick={exportCollegeReportCSV}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold rounded-xl shadow transition-all cursor-pointer"
-            >
-              <Download className="w-4 h-4" />
-              <span>EXPORT COLLEGE EXCEL / CSV</span>
-            </button>
-          </div>
-
-          {/* Department Performance Matrix */}
-          <div className="bg-white rounded-3xl p-5 border border-gray-200 shadow-md space-y-4">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-              DEPARTMENT PERFORMANCE COMPARISON
-            </h4>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[#0B2238] text-white font-bold uppercase text-[11px]">
-                    <th className="py-2.5 px-3 rounded-l-lg">Dept Code</th>
-                    <th className="py-2.5 px-3">Department Name</th>
-                    <th className="py-2.5 px-3 text-center">HOD Assigned</th>
-                    <th className="py-2.5 px-3 text-center">Staff Count</th>
-                    <th className="py-2.5 px-3 text-center">Students</th>
-                    <th className="py-2.5 px-3 text-center">Exams Published</th>
-                    <th className="py-2.5 px-3 text-center rounded-r-lg">Pass Rate %</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 font-medium">
-                  {departments.map((d, idx) => {
-                    const deptHod = hods.find((h) => h.department === d.code);
-                    const deptStaff = staffMembers.filter((s) => s.department === d.code).length;
-                    const deptStudents = students.filter((s) => s.department === d.code);
-                    const deptRecords = deptStudents.flatMap((s) => s.examRecords || []);
-                    const passCount = deptRecords.filter((r) => r.overallStatus === 'PASS').length;
-                    const passRate = deptRecords.length > 0 ? (passCount / deptRecords.length) * 100 : 0;
-
-                    return (
-                      <tr key={d.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
-                        <td className="py-3 px-3 font-mono font-bold text-blue-700">{d.code}</td>
-                        <td className="py-3 px-3 font-bold text-gray-900">{d.name}</td>
-                        <td className="py-3 px-3 text-center">
-                          {deptHod ? (
-                            <span className="text-emerald-700 font-bold">{deptHod.name}</span>
-                          ) : (
-                            <span className="text-gray-400 italic">Not Assigned</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-center font-bold">{deptStaff}</td>
-                        <td className="py-3 px-3 text-center font-bold text-purple-700">{deptStudents.length}</td>
-                        <td className="py-3 px-3 text-center font-mono">{deptRecords.length}</td>
-                        <td className="py-3 px-3 text-center">
+                <div className="grid grid-cols-2 gap-2.5 bg-slate-50/80 p-2.5 rounded-2xl border border-slate-200/80">
+                  {/* Left Column: Odd Semesters (1, 3, 5, 7) */}
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider text-center py-1 bg-slate-200/70 rounded-lg">
+                      Odd Semesters
+                    </div>
+                    {[1, 3, 5, 7].map((semNum) => {
+                      const countForSem = subjects.filter((s) => Number(s.semester) === semNum).length;
+                      const isSelected = subjectFilterSem === semNum;
+                      return (
+                        <button
+                          key={semNum}
+                          type="button"
+                          onClick={() => setSubjectFilterSem(semNum)}
+                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition text-left cursor-pointer ${
+                            isSelected
+                              ? 'bg-blue-900 text-white shadow-sm ring-1 ring-blue-900'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/60 shadow-xs'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className={`w-5 h-5 rounded-md shrink-0 flex items-center justify-center text-[10px] font-mono font-bold ${
+                                isSelected ? 'bg-blue-800 text-blue-100' : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              S{semNum}
+                            </span>
+                            <span className="truncate text-[11px]">Sem {semNum}</span>
+                          </div>
                           <span
-                            className={`font-black px-2.5 py-1 rounded text-xs ${
-                              passRate >= 75
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : passRate >= 50
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-red-100 text-red-800'
+                            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
+                              isSelected ? 'bg-blue-800 text-blue-100' : 'bg-slate-100 text-slate-600'
                             }`}
                           >
-                            {passRate.toFixed(1)}%
+                            {countForSem}
                           </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Right Column: Even Semesters (2, 4, 6, 8) */}
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider text-center py-1 bg-slate-200/70 rounded-lg">
+                      Even Semesters
+                    </div>
+                    {[2, 4, 6, 8].map((semNum) => {
+                      const countForSem = subjects.filter((s) => Number(s.semester) === semNum).length;
+                      const isSelected = subjectFilterSem === semNum;
+                      return (
+                        <button
+                          key={semNum}
+                          type="button"
+                          onClick={() => setSubjectFilterSem(semNum)}
+                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition text-left cursor-pointer ${
+                            isSelected
+                              ? 'bg-blue-900 text-white shadow-sm ring-1 ring-blue-900'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/60 shadow-xs'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className={`w-5 h-5 rounded-md shrink-0 flex items-center justify-center text-[10px] font-mono font-bold ${
+                                isSelected ? 'bg-blue-800 text-blue-100' : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              S{semNum}
+                            </span>
+                            <span className="truncate text-[11px]">Sem {semNum}</span>
+                          </div>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
+                              isSelected ? 'bg-blue-800 text-blue-100' : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {countForSem}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Subjects Table for Selected Semester (Right Side) */}
+              <div className="lg:col-span-7 xl:col-span-8 space-y-3">
+                {filteredSubjects.length === 0 ? (
+                  <div className="text-center py-12 px-4 border border-dashed border-slate-300 rounded-2xl bg-slate-50/50 space-y-3">
+                    <BookOpen className="w-10 h-10 text-slate-400 mx-auto" />
+                    <h4 className="text-xs font-bold text-slate-800">
+                      No subjects configured for Semester {subjectFilterSem}
+                      {subjectFilterDept !== 'all' ? ` in ${subjectFilterDept}` : ''}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                      Use the registration form above to add courses for Semester {subjectFilterSem}
+                      {subjectFilterDept !== 'all' ? ` in ${subjectFilterDept}` : ''}.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubjSem(subjectFilterSem);
+                        if (subjectFilterDept !== 'all') {
+                          setSubjDept(subjectFilterDept);
+                        }
+                        const el = document.getElementById('admin-course-code-input');
+                        if (el) el.focus();
+                      }}
+                      className="px-4 py-2 rounded-xl bg-blue-900 text-white font-bold text-xs hover:bg-blue-950 transition cursor-pointer"
+                    >
+                      + Add Course for Semester {subjectFilterSem}
+                      {subjectFilterDept !== 'all' ? ` (${subjectFilterDept})` : ''}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                          <th className="py-3 px-3.5">Course Code</th>
+                          <th className="py-3 px-3.5">Subject Name / Title</th>
+                          <th className="py-3 px-3.5">Department</th>
+                          <th className="py-3 px-3.5 text-center">Semester</th>
+                          <th className="py-3 px-3.5 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium bg-white">
+                        {filteredSubjects.map((s) => (
+                          <tr key={s.code} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-3 px-3.5 font-mono font-bold text-blue-900">{s.code}</td>
+                            <td className="py-3 px-3.5 text-slate-900 font-semibold">{s.name}</td>
+                            <td className="py-3 px-3.5 text-slate-700">
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-bold text-[11px]">
+                                {s.department}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3.5 text-center">
+                              <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-900 font-bold text-[11px] border border-blue-200">
+                                Semester {s.semester}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3.5 text-right">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDeleteConfirmTarget({
+                                    type: 'subject',
+                                    id: s.code,
+                                    name: s.name,
+                                    extraInfo: `Dept: ${s.department} | Sem ${s.semester}`,
+                                  })
+                                }
+                                className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                title={`Delete Subject ${s.code}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 4: GLOBAL SEARCH & OVERVIEW */}
-      {activeTab === 'global' && (
-        <div className="bg-white rounded-3xl p-5 border border-gray-200 shadow-md space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* TAB D: COLLEGE REPORTS */}
+      {activeSubTab === 'reports' && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
             <div>
-              <h3 className="font-extrabold text-gray-900 text-sm">All Students Directory</h3>
-              <p className="text-xs text-gray-500">Quickly search and view any student across all college departments</p>
+              <h2 className="text-base font-bold text-slate-900">
+                Institutional Academic Performance Reports
+              </h2>
+              <p className="text-xs text-slate-500">
+                High-level metrics across all departments, batches, and examination cycles
+              </p>
             </div>
+          </div>
 
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {departments.map((d) => {
+              const deptStudents = students.filter((s) => s.department === d.code);
+              let totalExams = 0;
+              let passedExams = 0;
+              deptStudents.forEach((st) => {
+                st.examRecords?.forEach((rec) => {
+                  totalExams++;
+                  if (rec.overallStatus === 'PASS') passedExams++;
+                });
+              });
+              const passPct = totalExams > 0 ? ((passedExams / totalExams) * 100).toFixed(1) : '100.0';
+
+              return (
+                <div key={d.code} className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-blue-900 bg-blue-100 px-2 py-0.5 rounded text-xs">
+                      {d.code}
+                    </span>
+                    <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                      {passPct}% Pass
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-900">{d.name}</h4>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-200">
+                    <div className="text-slate-600">
+                      Enrolled: <strong className="text-slate-900">{deptStudents.length}</strong>
+                    </div>
+                    <div className="text-slate-600">
+                      Staff: <strong className="text-slate-900">{staff.filter((s) => s.department === d.code).length}</strong>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB E: ALL RECORDS OVERVIEW */}
+      {activeSubTab === 'overview' && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Institutional Directory &amp; All Records
+              </h2>
+              <p className="text-xs text-slate-500">
+                Global search across Students, Faculty, HODs, and Subjects
+              </p>
+            </div>
+            <div className="relative max-w-xs w-full">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search Reg No or Name..."
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                placeholder="Search any name, ID, code..."
+                className="w-full py-2 pl-9 pr-3 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-100 text-gray-700 font-bold uppercase text-[10px]">
-                  <th className="py-2.5 px-3 rounded-l-lg">Reg No</th>
-                  <th className="py-2.5 px-3">Student Name</th>
-                  <th className="py-2.5 px-3">Dept</th>
-                  <th className="py-2.5 px-3 text-center">Year / Sem</th>
-                  <th className="py-2.5 px-3 text-center">Attendance</th>
-                  <th className="py-2.5 px-3 text-center rounded-r-lg">Exam Records</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 font-medium">
-                {students
-                  .filter(
-                    (s) =>
-                      s.registerNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      s.department.toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((st, idx) => (
-                    <tr key={st.registerNumber} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                      <td className="py-2.5 px-3 font-mono font-bold text-blue-700">{st.registerNumber}</td>
-                      <td className="py-2.5 px-3 font-bold text-gray-900">{st.name}</td>
-                      <td className="py-2.5 px-3 font-semibold">{st.department}</td>
-                      <td className="py-2.5 px-3 text-center text-gray-600">Yr {st.year} (Sem {st.currentSemester})</td>
-                      <td className="py-2.5 px-3 text-center">
-                        {st.attendance ? (
-                          <span
-                            className={`font-bold px-2 py-0.5 rounded text-[11px] ${
-                              st.attendance.percentage >= 75
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {st.attendance.percentage.toFixed(1)}%
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 text-[10px]">N/A</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-bold text-blue-900">
-                        {st.examRecords?.length || 0} Records
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+              Students ({students.length})
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {students
+                .filter((st) =>
+                  !searchTerm ||
+                  st.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  st.registerNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  st.department.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .map((st) => (
+                  <div key={st.registerNumber} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-slate-900">{st.registerNumber}</span>
+                      <span className="text-[10px] font-bold bg-blue-100 text-blue-900 px-2 py-0.5 rounded">
+                        {st.department} &bull; Sem {st.currentSemester}
+                      </span>
+                    </div>
+                    <p className="font-bold text-slate-800">{st.name}</p>
+                    <p className="text-[11px] text-slate-500">{st.email}</p>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 5. DEDICATED DELETE CONFIRMATION MODAL */}
+      {/* ========================================================================= */}
+      {deleteConfirmTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1 flex-1">
+                <h3 className="text-base font-black text-slate-900">
+                  Delete {deleteConfirmTarget.type === 'department' ? 'Academic Department' : deleteConfirmTarget.type === 'hod' ? 'HOD Account' : deleteConfirmTarget.type === 'staff' ? 'Faculty / Staff Account' : 'Curriculum Subject'}?
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  This action will permanently delete{' '}
+                  <strong className="text-slate-900 font-bold">
+                    {deleteConfirmTarget.name} ({deleteConfirmTarget.id})
+                  </strong>{' '}
+                  from the system database.
+                </p>
+                {deleteConfirmTarget.extraInfo && (
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    {deleteConfirmTarget.extraInfo}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => !isDeleting && setDeleteConfirmTarget(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-rose-50/70 border border-rose-200 rounded-2xl text-[11px] text-rose-900 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>
+                Are you sure? Any associated data or curriculum references linked directly to this {deleteConfirmTarget.type} will be affected.
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteConfirmTarget(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{isDeleting ? 'Deleting...' : `Confirm Delete`}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 };
+export default AdminPortal;

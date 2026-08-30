@@ -1,6 +1,7 @@
 {
   "name": "Jaya Sakthi Engineering College Results Portal",
-  "description": "College student results portal and admin/faculty management system for Jaya Sakthi Engineering College.",
+  "description": "Comprehensive Exam Cell & Academic Management Portal for Jaya Sakthi Engineering College, providing centralized control over departments, HODs, faculty, students, marks evaluation, and examination schedules.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+

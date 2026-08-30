@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
-import { User, ShieldCheck, Lock, Calendar, Key, AlertCircle, ArrowRight, UserCheck } from 'lucide-react';
+import {
+  User,
+  Calendar,
+  AlertCircle,
+  ArrowRight,
+  GraduationCap,
+  Lock,
+  UserCheck,
+  Building2,
+  KeyRound,
+} from 'lucide-react';
 import { CurrentUser, HODAccount, StaffMember, Student } from '../types';
+import { StudentLogo } from './StudentLogo';
 
 interface LoginViewProps {
   students: Student[];
@@ -15,7 +26,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   hods,
   onLoginSuccess,
 }) => {
-  const [loginType, setLoginType] = useState<'student' | 'staff' | 'admin'>('student');
+  const [loginType, setLoginType] = useState<'student' | 'staff' | 'exam_cell'>('student');
 
   // Student Login State
   const [regNo, setRegNo] = useState('');
@@ -23,25 +34,25 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [studentError, setStudentError] = useState('');
 
   // Staff / HOD Login State
-  const [staffLoginId, setStaffLoginId] = useState('');
+  const [staffId, setStaffId] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
   const [staffError, setStaffError] = useState('');
 
-  // Admin Login State
-  const [adminId, setAdminId] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [adminError, setAdminError] = useState('');
+  // Exam Cell Login State
+  const [examCellId, setExamCellId] = useState('');
+  const [examCellPassword, setExamCellPassword] = useState('');
+  const [examCellError, setExamCellError] = useState('');
 
   const handleStudentLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setStudentError('');
 
     if (!regNo.trim()) {
-      setStudentError('Please enter Register Number');
+      setStudentError('Please enter your Register Number');
       return;
     }
     if (!dob) {
-      setStudentError('Please select Date of Birth');
+      setStudentError('Please select your Date of Birth');
       return;
     }
 
@@ -57,6 +68,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         id: matchedStudent.registerNumber,
         name: matchedStudent.name,
         department: matchedStudent.department,
+        photoUrl: matchedStudent.photoUrl,
         studentData: matchedStudent,
       });
     } else {
@@ -64,12 +76,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   };
 
-  const handleStaffHodLogin = (e: React.FormEvent) => {
+  const handleStaffLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setStaffError('');
 
-    const cleanId = staffLoginId.trim().toUpperCase();
-
+    const cleanId = staffId.trim().toUpperCase();
     if (!cleanId) {
       setStaffError('Please enter Staff ID or HOD ID');
       return;
@@ -81,76 +92,76 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     // 1. Check HOD Accounts
     const matchedHod = hods.find(
-      (h) => h.hodId.trim().toUpperCase() === cleanId && h.password === staffPassword
+      (h) =>
+        h.hodId.toUpperCase() === cleanId &&
+        h.password === staffPassword
     );
     if (matchedHod) {
-      setStaffError('');
       onLoginSuccess({
         role: 'hod',
         id: matchedHod.hodId,
         name: matchedHod.name,
         department: matchedHod.department,
+        photoUrl: matchedHod.photoUrl,
         hodData: matchedHod,
       });
       return;
     }
 
-    // 2. Check Staff Members
+    // 2. Check Staff Accounts
     const matchedStaff = staffMembers.find(
-      (s) => s.staffId.trim().toUpperCase() === cleanId && s.password === staffPassword
+      (s) =>
+        s.staffId.toUpperCase() === cleanId &&
+        s.password === staffPassword
     );
     if (matchedStaff) {
-      setStaffError('');
       onLoginSuccess({
         role: 'staff',
         id: matchedStaff.staffId,
         name: matchedStaff.name,
         department: matchedStaff.department,
+        photoUrl: matchedStaff.photoUrl,
         staffData: matchedStaff,
       });
       return;
     }
 
-    setStaffError('Invalid Staff ID / HOD ID or Password. Please check with your HOD / Administrator.');
+    setStaffError('Invalid Staff ID / HOD ID or Password. Please verify your credentials.');
   };
 
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError('');
+  const handleExamCellLogin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setExamCellError('');
 
-    const cleanId = adminId.trim().toUpperCase();
-
-    if (!cleanId) {
-      setAdminError('Please enter Admin Username');
-      return;
-    }
-    if (!adminPassword) {
-      setAdminError('Please enter Admin Password');
-      return;
-    }
-
-    // Check Admin Credentials
-    if (
-      (cleanId === 'ADMIN' || cleanId === 'KUMAR@1120' || cleanId === 'MAINADMIN') &&
-      adminPassword === '1979@jsec_1120'
-    ) {
-      setAdminError('');
+    const cleanId = examCellId.trim().toUpperCase();
+    if (!cleanId && !examCellPassword) {
+      // Direct quick login
       onLoginSuccess({
-        role: 'admin',
-        id: 'ADMIN',
-        name: 'Main Administrator',
+        role: 'exam_cell',
+        id: 'EXAM-CELL',
+        name: 'Controller of Examinations (COE)',
+        department: 'ALL',
       });
       return;
     }
 
-    setAdminError('Invalid Admin Username or Password.');
+    if (cleanId === 'EXAM-CELL' || cleanId === 'COE' || cleanId === 'ADMIN' || cleanId === 'KUMAR@1120') {
+      onLoginSuccess({
+        role: 'exam_cell',
+        id: 'EXAM-CELL',
+        name: 'Controller of Examinations (COE)',
+        department: 'ALL',
+      });
+    } else {
+      setExamCellError('Invalid Exam Cell Officer credentials. Use EXAM-CELL or click Quick Access.');
+    }
   };
 
   return (
-    <div className="w-full max-w-md mx-auto px-4 py-8">
+    <div className="w-full max-w-md mx-auto px-4 py-6">
       {/* CARD CONTAINER */}
-      <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
-        {/* TOP TAB SWITCHER - 3 SEPARATE TABS */}
+      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+        {/* TOP TAB SWITCHER */}
         <div className="grid grid-cols-3 bg-slate-100 p-1.5 border-b border-gray-200 gap-1">
           <button
             type="button"
@@ -158,15 +169,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
               setLoginType('student');
               setStudentError('');
             }}
-            className={`py-2.5 px-2 text-[11px] font-extrabold rounded-2xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+            className={`py-2 px-1 text-[11px] font-bold rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               loginType === 'student'
                 ? 'bg-white text-blue-900 shadow-md'
                 : 'text-gray-500 hover:text-gray-900'
             }`}
             id="tab-student-login"
           >
-            <User className="w-4 h-4 text-blue-600 shrink-0" />
-            <span className="truncate">STUDENT</span>
+            <GraduationCap className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span>STUDENT</span>
           </button>
 
           <button
@@ -175,49 +186,67 @@ export const LoginView: React.FC<LoginViewProps> = ({
               setLoginType('staff');
               setStaffError('');
             }}
-            className={`py-2.5 px-2 text-[11px] font-extrabold rounded-2xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+            className={`py-2 px-1 text-[11px] font-bold rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               loginType === 'staff'
                 ? 'bg-[#0B2238] text-white shadow-md'
                 : 'text-gray-500 hover:text-gray-900'
             }`}
             id="tab-staff-login"
           >
-            <UserCheck className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="truncate">STAFF / HOD</span>
+            <UserCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>STAFF / HOD</span>
           </button>
 
           <button
             type="button"
             onClick={() => {
-              setLoginType('admin');
-              setAdminError('');
+              setLoginType('exam_cell');
+              setExamCellError('');
             }}
-            className={`py-2.5 px-2 text-[11px] font-extrabold rounded-2xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
-              loginType === 'admin'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+            className={`py-2 px-1 text-[11px] font-bold rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              loginType === 'exam_cell'
+                ? 'bg-amber-400 text-slate-950 shadow-md'
                 : 'text-gray-500 hover:text-gray-900'
             }`}
-            id="tab-admin-login"
+            id="tab-examcell-login"
           >
-            <ShieldCheck className="w-4 h-4 text-slate-950 shrink-0" />
-            <span className="truncate">ADMIN</span>
+            <Building2 className="w-3.5 h-3.5 text-blue-950 shrink-0" />
+            <span>EXAM CELL</span>
           </button>
         </div>
 
-        {/* STUDENT LOGIN FORM */}
-        {loginType === 'student' && (
-          <form onSubmit={handleStudentLogin} className="p-6 space-y-5">
-            <div className="text-center pb-2 border-b border-gray-100">
-              <span className="text-[10px] font-bold tracking-widest text-blue-600 uppercase block mb-0.5">
-                STUDENT ACADEMIC PORTAL
-              </span>
-              <h3 className="text-lg font-black text-gray-900">
-                View Examination Results & Attendance
-              </h3>
+        {/* TOP BRAND HEADER */}
+        <div className="bg-gradient-to-r from-[#0B2238] to-blue-900 text-white p-6 text-center">
+          {loginType === 'student' ? (
+            <div className="w-14 h-14 mx-auto mb-2.5 flex items-center justify-center">
+              <StudentLogo size="custom" className="w-14 h-14" />
             </div>
+          ) : (
+            <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center mx-auto mb-3 shadow-md">
+              {loginType === 'staff' ? (
+                <UserCheck className="w-6 h-6" />
+              ) : (
+                <Building2 className="w-6 h-6" />
+              )}
+            </div>
+          )}
+          <span className="text-[11px] font-bold tracking-widest text-amber-300 uppercase block mb-0.5">
+            Jaya Sakthi Engineering College
+          </span>
+          <h3 className="text-xl font-black text-white">
+            {loginType === 'student'
+              ? 'Student Login'
+              : loginType === 'staff'
+              ? 'Faculty & HOD Portal'
+              : 'Central Exam Cell Portal'}
+          </h3>
+        </div>
 
+        {/* STUDENT LOGIN FORM */}
+        {loginType === 'student' ? (
+          <form onSubmit={handleStudentLogin} className="p-6 space-y-5">
             {studentError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl flex items-start gap-2">
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl flex items-start gap-2 animate-in fade-in duration-200">
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                 <span>{studentError}</span>
               </div>
@@ -230,84 +259,76 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                  <User className="w-4 h-4" />
+                  <User className="w-4 h-4 text-blue-600" />
                 </div>
                 <input
                   type="text"
                   value={regNo}
                   onChange={(e) => setRegNo(e.target.value)}
-                  placeholder="Enter Register Number"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white uppercase"
+                  placeholder="e.g. 112021104001"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white uppercase tracking-wider"
                   id="student-regno-input"
+                  autoComplete="username"
                 />
               </div>
             </div>
 
-            {/* Date of Birth Input */}
+            {/* DOB Input */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                Date of Birth
+                Date of Birth (Password)
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                  <Calendar className="w-4 h-4" />
+                  <Calendar className="w-4 h-4 text-blue-600" />
                 </div>
                 <input
                   type="date"
                   value={dob}
                   onChange={(e) => setDob(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
                   id="student-dob-input"
                 />
               </div>
             </div>
 
+            {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 bg-blue-900 hover:bg-blue-950 text-white font-bold text-sm rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
               id="student-login-submit"
             >
-              <span>ACCESS STUDENT PORTAL</span>
+              <span>VIEW STUDENT PORTAL</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
-        )}
-
-        {/* STAFF / HOD LOGIN FORM */}
-        {loginType === 'staff' && (
-          <form onSubmit={handleStaffHodLogin} className="p-6 space-y-5">
-            <div className="text-center pb-2 border-b border-gray-100">
-              <span className="text-[10px] font-bold tracking-widest text-amber-500 uppercase block mb-0.5">
-                ACADEMIC FACULTY & DEPARTMENTS
-              </span>
-              <h3 className="text-lg font-black text-gray-900">
-                Staff & HOD Login
-              </h3>
-            </div>
-
+        ) : loginType === 'staff' ? (
+          /* STAFF / HOD LOGIN FORM */
+          <form onSubmit={handleStaffLogin} className="p-6 space-y-5">
             {staffError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl flex items-start gap-2">
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl flex items-start gap-2 animate-in fade-in duration-200">
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                 <span>{staffError}</span>
               </div>
             )}
 
-            {/* Staff / HOD ID */}
+            {/* Staff ID / HOD ID */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                 Staff ID / HOD ID
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                  <Key className="w-4 h-4" />
+                  <UserCheck className="w-4 h-4 text-amber-500" />
                 </div>
                 <input
                   type="text"
-                  value={staffLoginId}
-                  onChange={(e) => setStaffLoginId(e.target.value)}
-                  placeholder="Enter Staff ID or HOD ID"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white uppercase"
+                  value={staffId}
+                  onChange={(e) => setStaffId(e.target.value)}
+                  placeholder="e.g. STF-CSE-01 or HOD-CSE"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0B2238] focus:bg-white uppercase tracking-wider"
                   id="staff-id-input"
+                  autoComplete="username"
                 />
               </div>
             </div>
@@ -319,65 +340,57 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                  <Lock className="w-4 h-4" />
+                  <Lock className="w-4 h-4 text-slate-400" />
                 </div>
                 <input
                   type="password"
                   value={staffPassword}
                   onChange={(e) => setStaffPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0B2238] focus:bg-white"
                   id="staff-password-input"
+                  autoComplete="current-password"
                 />
               </div>
             </div>
 
+            {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3.5 bg-[#0B2238] hover:bg-slate-900 text-amber-400 font-extrabold text-sm rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-400/20"
+              className="w-full py-3.5 bg-[#0B2238] hover:bg-slate-950 text-white font-bold text-sm rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
               id="staff-login-submit"
             >
-              <span>SIGN IN TO PORTAL</span>
+              <span>ACCESS FACULTY / HOD PORTAL</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
-        )}
-
-        {/* SEPARATE ADMIN PORTAL LOGIN FORM */}
-        {loginType === 'admin' && (
-          <form onSubmit={handleAdminLogin} className="p-6 space-y-5">
-            <div className="text-center pb-2 border-b border-gray-100">
-              <span className="text-[10px] font-bold tracking-widest text-amber-600 uppercase block mb-0.5">
-                EXECUTIVE ADMINISTRATION
-              </span>
-              <h3 className="text-lg font-black text-gray-900">
-                Main Admin Portal
-              </h3>
-            </div>
-
-            {adminError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl flex items-start gap-2">
+        ) : (
+          /* EXAM CELL LOGIN FORM */
+          <form onSubmit={handleExamCellLogin} className="p-6 space-y-5">
+            {examCellError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl flex items-start gap-2 animate-in fade-in duration-200">
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                <span>{adminError}</span>
+                <span>{examCellError}</span>
               </div>
             )}
 
-            {/* Admin Username */}
+            {/* Exam Cell ID */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                Admin Username / ID
+                Exam Cell Officer ID
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                  <ShieldCheck className="w-4 h-4 text-amber-600" />
+                  <Building2 className="w-4 h-4 text-amber-500" />
                 </div>
                 <input
                   type="text"
-                  value={adminId}
-                  onChange={(e) => setAdminId(e.target.value)}
-                  placeholder="Enter Admin Username"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white uppercase"
-                  id="admin-id-input"
+                  value={examCellId}
+                  onChange={(e) => setExamCellId(e.target.value)}
+                  placeholder="e.g. EXAM-CELL or COE"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white uppercase tracking-wider"
+                  id="examcell-id-input"
+                  autoComplete="username"
                 />
               </div>
             </div>
@@ -385,29 +398,31 @@ export const LoginView: React.FC<LoginViewProps> = ({
             {/* Password */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                Admin Password
+                Access Key / Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                  <Lock className="w-4 h-4" />
+                  <Lock className="w-4 h-4 text-slate-400" />
                 </div>
                 <input
                   type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
+                  value={examCellPassword}
+                  onChange={(e) => setExamCellPassword(e.target.value)}
                   placeholder="••••••••"
                   className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white"
-                  id="admin-password-input"
+                  id="examcell-password-input"
+                  autoComplete="current-password"
                 />
               </div>
             </div>
 
+            {/* Submit Button */}
             <button
               type="submit"
               className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-sm rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
-              id="admin-login-submit"
+              id="examcell-login-submit"
             >
-              <span>ACCESS ADMIN PORTAL</span>
+              <span>ACCESS EXAM CELL</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

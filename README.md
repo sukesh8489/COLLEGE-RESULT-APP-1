@@ -15,16 +15,16 @@ This platform streamlines academic administration, mark entry, attendance tracki
 * **GPA & CGPA Calculations**: Automated grade calculation based on course credit weightage.
 
 ### 👨‍🏫 2. Teaching Staff Portal
-* **Mark Entry & Updating**: Enter and update internal assessment marks for assigned subjects.
+* **Subject-Restricted Mark Entry**: Staff members can ONLY access and enter internal assessment marks for subjects explicitly assigned to them by their HOD.
 * **Attendance Logging**: Update student attendance records subject-wise.
 * **Class Roster Management**: Add new students or bulk-import student records for assigned classes.
 
 ### 👔 3. Head of Department (HOD) Portal
 * **Faculty Management**: Create and manage staff accounts within the department.
-* **Subject Allocation**: Assign curriculum subjects to teaching faculty members.
+* **Subject Allocation**: Assign curriculum subjects to teaching faculty members (enforces staff mark entry permissions).
 * **Department Analytics**: Track overall department pass percentage, class averages, and academic performance metrics.
 
-### 🛡️ 4. Main Admin Portal
+### 🛡️ 4. Exam Cell Portal
 * **Department Configuration**: Add, update, or manage college departments (CSE, ECE, EEE, MECH, IT, CIVIL, AD, AI&DS).
 * **HOD Account Management**: Provision credentials and assign HODs for each academic department.
 * **Global Academic Settings**: Manage subjects, course credits, and college-wide regulation settings.

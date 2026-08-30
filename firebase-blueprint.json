@@ -21,7 +21,8 @@
         "name": { "type": "string" },
         "email": { "type": "string" },
         "department": { "type": "string" },
-        "phone": { "type": "string" }
+        "phone": { "type": "string" },
+        "photoUrl": { "type": "string" }
       },
       "required": ["hodId", "password", "name", "email", "department"]
     },
@@ -36,7 +37,12 @@
         "email": { "type": "string" },
         "department": { "type": "string" },
         "designation": { "type": "string" },
-        "phone": { "type": "string" }
+        "phone": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "isCC": { "type": "boolean" },
+        "ccYear": { "type": "number" },
+        "ccSemester": { "type": "number" },
+        "ccBatch": { "type": "string" }
       },
       "required": ["staffId", "password", "name", "email", "department", "designation"]
     },
@@ -54,6 +60,7 @@
         "batch": { "type": "string" },
         "email": { "type": "string" },
         "phone": { "type": "string" },
+        "photoUrl": { "type": "string" },
         "attendance": { "type": "object" },
         "examRecords": { "type": "array" }
       },
@@ -84,6 +91,105 @@
         "department": { "type": "string" }
       },
       "required": ["id", "subjectCode", "staffId", "department"]
+    },
+    "exams": {
+      "title": "Exam Schedules",
+      "description": "Upcoming exam timetables published by Exam Cell",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examType": { "type": "string" },
+        "department": { "type": "string" },
+        "semester": { "type": "number" },
+        "subjectCode": { "type": "string" },
+        "subjectName": { "type": "string" },
+        "examDate": { "type": "string" },
+        "examTime": { "type": "string" },
+        "session": { "type": "string" },
+        "venue": { "type": "string" },
+        "instructions": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "examType", "department", "semester", "subjectCode", "subjectName", "examDate", "examTime", "session"]
+    },
+    "dailyAttendance": {
+      "title": "Daily Attendance Records",
+      "description": "Daily attendance logs marked by Class Counselors (CC)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "department": { "type": "string" },
+        "semester": { "type": "number" },
+        "session": { "type": "string" },
+        "markedByStaffId": { "type": "string" },
+        "markedByStaffName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "records": { "type": "array" }
+      },
+      "required": ["id", "date", "department", "semester", "session", "markedByStaffId", "records"]
+    },
+    "academicEvents": {
+      "title": "Academic Calendar Events",
+      "description": "Important dates, internal assessment schedules, holidays, and college events published by Exam Cell",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "category": { "type": "string" },
+        "targetAudience": { "type": "string" },
+        "isHoliday": { "type": "boolean" },
+        "semester": { "type": "number" },
+        "priority": { "type": "string" },
+        "venueOrLocation": { "type": "string" },
+        "publishedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "startDate", "category", "targetAudience"]
+    },
+    "examAttendance": {
+      "title": "Exam Attendance Records",
+      "description": "Hall attendance logs for IAT-1, IAT-2, IAT-3, and Model Exams across departments and years",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examType": { "type": "string" },
+        "department": { "type": "string" },
+        "year": { "type": "number" },
+        "semester": { "type": "number" },
+        "subjectCode": { "type": "string" },
+        "subjectName": { "type": "string" },
+        "examDate": { "type": "string" },
+        "session": { "type": "string" },
+        "hallNumber": { "type": "string" },
+        "invigilatorStaffId": { "type": "string" },
+        "invigilatorName": { "type": "string" },
+        "totalStudents": { "type": "number" },
+        "presentCount": { "type": "number" },
+        "absentCount": { "type": "number" },
+        "odCount": { "type": "number" },
+        "malpracticeCount": { "type": "number" },
+        "medicalCount": { "type": "number" },
+        "records": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "examType", "department", "semester", "subjectCode", "examDate", "session", "records"]
     }
+  },
+  "firestore": {
+    "/departments/{code}": { "schema": "departments", "description": "College departments" },
+    "/hods/{hodId}": { "schema": "hods", "description": "HOD User accounts" },
+    "/staff/{staffId}": { "schema": "staff", "description": "Teaching faculty accounts" },
+    "/students/{registerNumber}": { "schema": "students", "description": "Student records & marks" },
+    "/subjects/{code}": { "schema": "subjects", "description": "Curriculum subjects" },
+    "/assignments/{id}": { "schema": "assignments", "description": "Subject faculty mapping" },
+    "/exams/{id}": { "schema": "exams", "description": "Exam schedules published by Exam Cell" },
+    "/dailyAttendance/{id}": { "schema": "dailyAttendance", "description": "Daily attendance logs marked by CCs" },
+    "/academicEvents/{id}": { "schema": "academicEvents", "description": "Shared Academic Calendar Events & Schedules" },
+    "/examAttendance/{id}": { "schema": "examAttendance", "description": "Exam Hall Attendance Records for IAT-1, 2, 3, Model Exams" }
   }
 }
