@@ -51,6 +51,7 @@ import {
   syncExamsToFirestore,
   syncDailyAttendanceToFirestore,
   syncAcademicEventsToFirestore,
+  clearAllStudentsInFirestore,
 } from './lib/firestoreService';
 
 export function App() {
@@ -83,6 +84,11 @@ export function App() {
 
   // Real-time Firestore Subscriptions
   useEffect(() => {
+    // Clear all existing student documents in the database
+    clearAllStudentsInFirestore().catch((err) => {
+      console.error('Error clearing student documents from Firestore:', err);
+    });
+
     const unsubDepts = subscribeToDepartments((data) => setDepartments(data));
     const unsubHods = subscribeToHods((data) => setHods(data));
     const unsubStaff = subscribeToStaff((data) => setStaffMembers(data));

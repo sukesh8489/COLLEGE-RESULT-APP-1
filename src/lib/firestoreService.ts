@@ -132,18 +132,9 @@ export const subscribeToStaff = (callback: (staff: StaffMember[]) => void) => {
 
 export const subscribeToStudents = (callback: (students: Student[]) => void) => {
   const colRef = collection(db, COLLECTIONS.STUDENTS);
-  return onSnapshot(colRef, async (snapshot) => {
-    if (snapshot.empty && INITIAL_STUDENTS.length > 0) {
-      const batch = writeBatch(db);
-      INITIAL_STUDENTS.forEach((st) => {
-        const docRef = doc(db, COLLECTIONS.STUDENTS, st.registerNumber);
-        batch.set(docRef, sanitizeForFirestore(st));
-      });
-      await batch.commit();
-    } else {
-      const data = snapshot.docs.map((doc) => doc.data() as Student);
-      callback(data);
-    }
+  return onSnapshot(colRef, (snapshot) => {
+    const data = snapshot.docs.map((doc) => doc.data() as Student);
+    callback(data);
   });
 };
 
@@ -750,6 +741,10 @@ export const resetWholeCollegeDatabase = async (options?: {
   if (isWipeAll || options?.wipeSubjects) {
     await clearEntireCollection(COLLECTIONS.SUBJECTS);
   }
+};
+
+export const clearAllStudentsInFirestore = async () => {
+  await clearEntireCollection(COLLECTIONS.STUDENTS);
 };
 
 export const clearAllSubjectsInFirestore = async () => {

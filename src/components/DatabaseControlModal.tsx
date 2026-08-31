@@ -16,6 +16,7 @@ import {
   PlusCircle,
   FileSpreadsheet,
   Upload,
+  Trash2,
 } from 'lucide-react';
 import {
   DepartmentInfo,
@@ -32,6 +33,7 @@ import {
   saveStaffInFirestore,
   saveStudentInFirestore,
   saveMultipleStudentsInFirestore,
+  clearAllStudentsInFirestore,
 } from '../lib/firestoreService';
 import { DEPARTMENTS } from '../data/mockData';
 
@@ -287,6 +289,26 @@ export const DatabaseControlModal: React.FC<DatabaseControlModalProps> = ({
     }
   };
 
+  const handleClearStudents = async () => {
+    if (!window.confirm('Are you sure you want to permanently clear ALL students from the Firestore database?')) {
+      return;
+    }
+    setIsProcessing(true);
+    setStatusMessage(null);
+    try {
+      await clearAllStudentsInFirestore();
+      setStatusMessage({
+        type: 'success',
+        text: 'All student documents have been permanently removed from the Firestore database.',
+      });
+    } catch (err: any) {
+      console.error(err);
+      setStatusMessage({ type: 'error', text: err?.message || 'Failed to clear students.' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
@@ -464,6 +486,26 @@ export const DatabaseControlModal: React.FC<DatabaseControlModalProps> = ({
                     </span>
                   ))}
                 </div>
+              </div>
+
+              {/* Student Database Maintenance Action */}
+              <div className="p-4 bg-rose-50/70 rounded-2xl border border-rose-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h5 className="text-xs font-black text-rose-950 uppercase tracking-wider">
+                    Student Records Clean Up
+                  </h5>
+                  <p className="text-xs text-rose-800/80 mt-0.5">
+                    Clear all enrolled students ({students.length} current) from the live Firestore database.
+                  </p>
+                </div>
+                <button
+                  onClick={handleClearStudents}
+                  disabled={isProcessing}
+                  className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>CLEAR ALL STUDENTS</span>
+                </button>
               </div>
             </div>
           )}

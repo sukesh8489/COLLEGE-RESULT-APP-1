@@ -133,27 +133,25 @@ export const LoginView: React.FC<LoginViewProps> = ({
     if (e) e.preventDefault();
     setExamCellError('');
 
-    const cleanId = examCellId.trim().toUpperCase();
-    if (!cleanId && !examCellPassword) {
-      // Direct quick login
-      onLoginSuccess({
-        role: 'exam_cell',
-        id: 'EXAM-CELL',
-        name: 'Controller of Examinations (COE)',
-        department: 'ALL',
-      });
+    const cleanId = examCellId.trim();
+    if (!cleanId) {
+      setExamCellError('Please enter Exam Cell ID');
+      return;
+    }
+    if (!examCellPassword) {
+      setExamCellError('Please enter Password');
       return;
     }
 
-    if (cleanId === 'EXAM-CELL' || cleanId === 'COE' || cleanId === 'ADMIN' || cleanId === 'KUMAR@1120') {
+    if (cleanId.toUpperCase() === 'KUMAR@1120' && examCellPassword === '1979@jsec_1120') {
       onLoginSuccess({
         role: 'exam_cell',
-        id: 'EXAM-CELL',
+        id: 'KUMAR@1120',
         name: 'Controller of Examinations (COE)',
         department: 'ALL',
       });
     } else {
-      setExamCellError('Invalid Exam Cell Officer credentials. Use EXAM-CELL or click Quick Access.');
+      setExamCellError('Invalid ID or password');
     }
   };
 
@@ -387,8 +385,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   type="text"
                   value={examCellId}
                   onChange={(e) => setExamCellId(e.target.value)}
-                  placeholder="e.g. EXAM-CELL or COE"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white uppercase tracking-wider"
+                  placeholder="Enter Exam Cell ID"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white tracking-wider"
                   id="examcell-id-input"
                   autoComplete="username"
                 />
