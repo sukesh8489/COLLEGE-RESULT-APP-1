@@ -42,11 +42,15 @@ import {
   subscribeToEntryPolicy,
   saveEntryPolicyInFirestore,
   saveDailyAttendanceInFirestore,
+  syncDepartmentsToFirestore,
   syncHodsToFirestore,
   syncStaffToFirestore,
   syncStudentsToFirestore,
   syncSubjectsToFirestore,
   syncAssignmentsToFirestore,
+  syncExamsToFirestore,
+  syncDailyAttendanceToFirestore,
+  syncAcademicEventsToFirestore,
 } from './lib/firestoreService';
 
 export function App() {
@@ -118,7 +122,23 @@ export function App() {
     }
   }, [currentUser]);
 
-  // Sync helpers to Firestore
+  // Sync helpers to Firestore for real-time synchronization across all portals
+  const setDepartmentsWrapped: React.Dispatch<React.SetStateAction<DepartmentInfo[]>> = (updater) => {
+    setDepartments((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      syncDepartmentsToFirestore(prev, next);
+      return next;
+    });
+  };
+
+  const setHodsWrapped: React.Dispatch<React.SetStateAction<HODAccount[]>> = (updater) => {
+    setHods((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      syncHodsToFirestore(prev, next);
+      return next;
+    });
+  };
+
   const setStudentsWrapped: React.Dispatch<React.SetStateAction<Student[]>> = (updater) => {
     setStudents((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
@@ -151,14 +171,38 @@ export function App() {
     });
   };
 
+  const setExamsWrapped: React.Dispatch<React.SetStateAction<ExamSchedule[]>> = (updater) => {
+    setExams((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      syncExamsToFirestore(prev, next);
+      return next;
+    });
+  };
+
+  const setDailyAttendanceWrapped: React.Dispatch<React.SetStateAction<DailyAttendanceRecord[]>> = (updater) => {
+    setDailyAttendance((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      syncDailyAttendanceToFirestore(prev, next);
+      return next;
+    });
+  };
+
+  const setAcademicEventsWrapped: React.Dispatch<React.SetStateAction<AcademicCalendarEvent[]>> = (updater) => {
+    setAcademicEvents((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      syncAcademicEventsToFirestore(prev, next);
+      return next;
+    });
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
   };
 
-  // Find active student data if role is student
+  // Find active student data dynamically from real-time students collection if role is student
   const activeStudentData =
     currentUser?.role === 'student'
-      ? currentUser.studentData || students.find((s) => s.registerNumber === currentUser.id)
+      ? students.find((s) => s.registerNumber === currentUser.id) || currentUser.studentData
       : null;
 
   return (
@@ -240,7 +284,7 @@ export function App() {
             dailyAttendance={dailyAttendance}
             onSaveDailyAttendance={(rec) => {
               saveDailyAttendanceInFirestore(rec);
-              setDailyAttendance((prev) => [rec, ...prev.filter((p) => p.id !== rec.id)]);
+              setDailyAttendanceWrapped((prev) => [rec, ...prev.filter((p) => p.id !== rec.id)]);
             }}
             academicEvents={academicEvents}
             entryPolicy={entryPolicy}
@@ -261,6 +305,7 @@ export function App() {
             dailyAttendance={dailyAttendance}
             exams={exams}
             academicEvents={academicEvents}
+            entryPolicy={entryPolicy}
             onLogout={handleLogout}
           />
         ) : currentUser.role === 'exam_cell' ? (
@@ -277,14 +322,14 @@ export function App() {
             onLogout={handleLogout}
             hods={hods}
             staffMembers={staffMembers}
-            onAddDepartment={(newDept) => setDepartments((prev) => [...prev.filter((d) => d.code !== newDept.code), newDept])}
-            onDeleteDepartment={(code) => setDepartments((prev) => prev.filter((d) => d.code !== code))}
-            onAddHod={(newHod) => setHods((prev) => [...prev.filter((h) => h.hodId !== newHod.hodId), newHod])}
-            onDeleteHod={(id) => setHods((prev) => prev.filter((h) => h.hodId !== id))}
-            onAddStaff={(newStaff) => setStaffMembers((prev) => [...prev.filter((s) => s.staffId !== newStaff.staffId), newStaff])}
-            onDeleteStaff={(id) => setStaffMembers((prev) => prev.filter((s) => s.staffId !== id))}
-            onAddSubject={(newSubj) => setSubjects((prev) => [...prev.filter((s) => s.code !== newSubj.code), newSubj])}
-            onDeleteSubject={(code) => setSubjects((prev) => prev.filter((s) => s.code !== code))}
+            onAddDepartment={(newDept) => setDepartmentsWrapped((prev) => [...prev.filter((d) => d.code !== newDept.code), newDept])}
+            onDeleteDepartment={(code) => setDepartmentsWrapped((prev) => prev.filter((d) => d.code !== code))}
+            onAddHod={(newHod) => setHodsWrapped((prev) => [...prev.filter((h) => h.hodId !== newHod.hodId), newHod])}
+            onDeleteHod={(id) => setHodsWrapped((prev) => prev.filter((h) => h.hodId !== id))}
+            onAddStaff={(newStaff) => setStaffWrapped((prev) => [...prev.filter((s) => s.staffId !== newStaff.staffId), newStaff])}
+            onDeleteStaff={(id) => setStaffWrapped((prev) => prev.filter((s) => s.staffId !== id))}
+            onAddSubject={(newSubj) => setSubjectsWrapped((prev) => [...prev.filter((s) => s.code !== newSubj.code), newSubj])}
+            onDeleteSubject={(code) => setSubjectsWrapped((prev) => prev.filter((s) => s.code !== code))}
           />
         ) : (
           <div className="text-center py-12">

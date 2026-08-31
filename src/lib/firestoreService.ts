@@ -98,33 +98,69 @@ export const subscribeToDepartments = (
 
 export const subscribeToHods = (callback: (hods: HODAccount[]) => void) => {
   const colRef = collection(db, COLLECTIONS.HODS);
-  return onSnapshot(colRef, (snapshot) => {
-    const data = snapshot.docs.map((doc) => doc.data() as HODAccount);
-    callback(data);
+  return onSnapshot(colRef, async (snapshot) => {
+    if (snapshot.empty && INITIAL_HODS.length > 0) {
+      const batch = writeBatch(db);
+      INITIAL_HODS.forEach((hod) => {
+        const docRef = doc(db, COLLECTIONS.HODS, hod.hodId);
+        batch.set(docRef, sanitizeForFirestore(hod));
+      });
+      await batch.commit();
+    } else {
+      const data = snapshot.docs.map((doc) => doc.data() as HODAccount);
+      callback(data);
+    }
   });
 };
 
 export const subscribeToStaff = (callback: (staff: StaffMember[]) => void) => {
   const colRef = collection(db, COLLECTIONS.STAFF);
-  return onSnapshot(colRef, (snapshot) => {
-    const data = snapshot.docs.map((doc) => doc.data() as StaffMember);
-    callback(data);
+  return onSnapshot(colRef, async (snapshot) => {
+    if (snapshot.empty && INITIAL_STAFF.length > 0) {
+      const batch = writeBatch(db);
+      INITIAL_STAFF.forEach((staff) => {
+        const docRef = doc(db, COLLECTIONS.STAFF, staff.staffId);
+        batch.set(docRef, sanitizeForFirestore(staff));
+      });
+      await batch.commit();
+    } else {
+      const data = snapshot.docs.map((doc) => doc.data() as StaffMember);
+      callback(data);
+    }
   });
 };
 
 export const subscribeToStudents = (callback: (students: Student[]) => void) => {
   const colRef = collection(db, COLLECTIONS.STUDENTS);
-  return onSnapshot(colRef, (snapshot) => {
-    const data = snapshot.docs.map((doc) => doc.data() as Student);
-    callback(data);
+  return onSnapshot(colRef, async (snapshot) => {
+    if (snapshot.empty && INITIAL_STUDENTS.length > 0) {
+      const batch = writeBatch(db);
+      INITIAL_STUDENTS.forEach((st) => {
+        const docRef = doc(db, COLLECTIONS.STUDENTS, st.registerNumber);
+        batch.set(docRef, sanitizeForFirestore(st));
+      });
+      await batch.commit();
+    } else {
+      const data = snapshot.docs.map((doc) => doc.data() as Student);
+      callback(data);
+    }
   });
 };
 
 export const subscribeToSubjects = (callback: (subjects: Subject[]) => void) => {
   const colRef = collection(db, COLLECTIONS.SUBJECTS);
-  return onSnapshot(colRef, (snapshot) => {
-    const data = snapshot.docs.map((doc) => doc.data() as Subject);
-    callback(data);
+  return onSnapshot(colRef, async (snapshot) => {
+    if (snapshot.empty && SUBJECTS.length > 0) {
+      const batch = writeBatch(db);
+      SUBJECTS.forEach((subj) => {
+        const docRef = doc(db, COLLECTIONS.SUBJECTS, subj.code);
+        batch.set(docRef, sanitizeForFirestore(subj));
+      });
+      await batch.commit();
+    } else {
+      const data = snapshot.docs.map((doc) => doc.data() as Subject);
+      callback(data);
+    }
   });
 };
 

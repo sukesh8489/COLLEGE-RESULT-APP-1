@@ -48,6 +48,7 @@ import {
 import { AttendanceDownloadModal } from './AttendanceDownloadModal';
 import { AddStudentModal } from './AddStudentModal';
 import { checkMarksEntryPermission } from '../utils/permissionUtils';
+import { saveMultipleStudentsInFirestore, saveStudentInFirestore } from '../lib/firestoreService';
 
 interface StaffPortalProps {
   currentUser: CurrentUser;
@@ -255,8 +256,10 @@ export const StaffPortal: React.FC<StaffPortalProps> = ({
       return;
     }
 
-    onUpdateStudents((prev) =>
-      prev.map((st) => {
+    const updatedStudentsList: Student[] = [];
+
+    onUpdateStudents((prev) => {
+      const nextStudents = prev.map((st) => {
         if (st.department === staff.department && st.currentSemester === selectedMarksSubject.semester) {
           const inputData = marksBatchMap[st.registerNumber] || {
             marksObtained: 0,
@@ -326,14 +329,24 @@ export const StaffPortal: React.FC<StaffPortalProps> = ({
             });
           }
 
-          return {
+          const updatedSt = {
             ...st,
             examRecords: existingRecords,
           };
+          updatedStudentsList.push(updatedSt);
+          return updatedSt;
         }
         return st;
-      })
-    );
+      });
+
+      if (updatedStudentsList.length > 0) {
+        saveMultipleStudentsInFirestore(updatedStudentsList).catch((err) =>
+          console.error('Failed to sync batch marks to Firestore:', err)
+        );
+      }
+
+      return nextStudents;
+    });
 
     setMarksSaveSuccess(true);
     setTimeout(() => setMarksSaveSuccess(false), 3000);

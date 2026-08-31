@@ -36,7 +36,7 @@ import {
   Subject,
   SubjectAssignment,
 } from '../types';
-import { saveSubjectInFirestore, deleteSubjectFromFirestore, saveStaffInFirestore } from '../lib/firestoreService';
+import { saveSubjectInFirestore, deleteSubjectFromFirestore, saveStaffInFirestore, saveStudentInFirestore } from '../lib/firestoreService';
 import { checkMarksEntryPermission } from '../utils/permissionUtils';
 import { AdminMarksModal } from './AdminMarksModal';
 import { AttendanceDownloadModal } from './AttendanceDownloadModal';
@@ -1068,7 +1068,8 @@ export const HodPortal: React.FC<HodPortalProps> = ({
           subjects={subjects}
           entryPolicy={entryPolicy}
           userRole="hod"
-          onSaveStudent={(updated) => {
+          onSaveStudent={async (updated) => {
+            await saveStudentInFirestore(updated).catch((err) => console.error(err));
             onUpdateStudents((prev) =>
               prev.map((s) => (s.registerNumber === updated.registerNumber ? updated : s))
             );
